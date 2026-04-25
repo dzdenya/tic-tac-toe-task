@@ -1,13 +1,14 @@
 package com.flamingo.tictactoe.engine.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
+@Getter
+@Setter
+@ToString
 @Table(name = "games")
 public class GameEntity {
 
@@ -40,34 +41,6 @@ public class GameEntity {
 		this.id = id;
 		this.cells = EMPTY_BOARD;
 		this.status = GameStatus.IN_PROGRESS;
-	}
-
-	public String getId() {
-		return id;
-	}
-
-	public String getCells() {
-		return cells;
-	}
-
-	public GameStatus getStatus() {
-		return status;
-	}
-
-	public PlayerSymbol getWinner() {
-		return winner;
-	}
-
-	public PlayerSymbol getLastPlayer() {
-		return lastPlayer;
-	}
-
-	public Integer getLastRow() {
-		return lastRow;
-	}
-
-	public Integer getLastCol() {
-		return lastCol;
 	}
 
 	public void applyMove(PlayerSymbol player, int row, int col) {
