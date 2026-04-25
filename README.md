@@ -38,6 +38,23 @@ Run the session service:
 
 Then open `ui/index.html`.
 
+The UI calls `http://localhost:8082`, and the Game Session Service calls the Game Engine Service at `http://localhost:8081`.
+
+## API Smoke Test
+
+With both services running:
+
+```bash
+curl -X POST http://localhost:8082/sessions
+```
+
+Use the returned `sessionId`:
+
+```bash
+curl -X POST http://localhost:8082/sessions/{sessionId}/simulate
+curl http://localhost:8082/sessions/{sessionId}
+```
+
 ## Notes
 
 - The UI calls the Game Session Service only.

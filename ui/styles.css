@@ -67,6 +67,7 @@ h2 {
 }
 
 .status-panel,
+.session-panel,
 .history-panel {
   background: #ffffff;
   border: 1px solid #dbe3ef;
@@ -74,15 +75,28 @@ h2 {
   padding: 16px;
 }
 
-.status-panel {
+.status-panel,
+.session-panel {
   align-items: center;
   display: flex;
   justify-content: space-between;
+  margin-block-end: 12px;
+}
+
+.session-panel {
   margin-block-end: 20px;
 }
 
-.status-panel span {
+.status-panel span,
+.session-panel span {
   color: #64748b;
+}
+
+.session-panel strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .board {
@@ -104,6 +118,14 @@ h2 {
   font-weight: 800;
   justify-content: center;
   min-inline-size: 0;
+}
+
+.cell.x {
+  color: #176b87;
+}
+
+.cell.o {
+  color: #9f1239;
 }
 
 .history-panel ol {

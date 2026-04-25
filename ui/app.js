@@ -3,6 +3,7 @@ const apiBaseUrl = 'http://localhost:8082';
 const boardElement = document.querySelector('#board');
 const startButton = document.querySelector('#startButton');
 const statusText = document.querySelector('#statusText');
+const sessionText = document.querySelector('#sessionText');
 const moveHistory = document.querySelector('#moveHistory');
 const errorText = document.querySelector('#errorText');
 
@@ -11,7 +12,7 @@ function renderBoard(board = emptyBoard()) {
 
   board.flat().forEach((value) => {
     const cell = document.createElement('div');
-    cell.className = 'cell';
+    cell.className = value ? `cell ${value.toLowerCase()}` : 'cell';
     cell.textContent = value ?? '';
     boardElement.append(cell);
   });
@@ -44,26 +45,40 @@ async function postJson(path) {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed with status ${response.status}`);
+    const message = await readErrorMessage(response);
+    throw new Error(message);
   }
 
   return response.json();
+}
+
+async function readErrorMessage(response) {
+  const fallback = `Request failed with status ${response.status}`;
+
+  try {
+    const payload = await response.json();
+    return payload.message || fallback;
+  } catch {
+    const text = await response.text();
+    return text || fallback;
+  }
 }
 
 async function startSimulation() {
   startButton.disabled = true;
   errorText.textContent = '';
   statusText.textContent = 'Creating session';
+  sessionText.textContent = 'Not started';
   renderBoard();
   renderMoves();
 
   try {
     const session = await postJson('/sessions');
+    sessionText.textContent = session.sessionId;
     statusText.textContent = 'Simulating';
 
     const result = await postJson(`/sessions/${session.sessionId}/simulate`);
-    statusText.textContent = result.game?.status ?? result.status;
+    statusText.textContent = formatStatus(result.game?.status ?? result.status, result.game?.winner);
     renderBoard(result.game?.board);
     renderMoves(result.moves);
   } catch (error) {
@@ -72,6 +87,16 @@ async function startSimulation() {
   } finally {
     startButton.disabled = false;
   }
+}
+
+function formatStatus(status, winner) {
+  if (winner) {
+    return `${winner} won`;
+  }
+  if (status === 'DRAW') {
+    return 'Draw';
+  }
+  return status?.replaceAll('_', ' ') ?? 'Unknown';
 }
 
 startButton.addEventListener('click', startSimulation);
