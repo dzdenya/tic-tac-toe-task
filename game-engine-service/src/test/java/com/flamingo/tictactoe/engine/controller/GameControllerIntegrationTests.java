@@ -69,6 +69,15 @@ class GameControllerIntegrationTests {
 	}
 
 	@Test
+	void rejectsPostForGameLookupEndpoint() throws Exception {
+		HttpResponse<String> response = postJson("/games/1", "{}");
+
+		assertThat(response.statusCode()).isEqualTo(405);
+		assertThat(json(response, "$.status")).isEqualTo(405);
+		assertThat(json(response, "$.message")).isEqualTo("Method is not supported for this endpoint");
+	}
+
+	@Test
 	void rejectsMoveOutsideBoard() throws Exception {
 		String gameId = newGameId();
 

@@ -42,8 +42,9 @@ class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-	ResponseEntity<ApiErrorResponse> handleMethodNotSupported(HttpServletRequest request) {
-		return error(HttpStatus.METHOD_NOT_ALLOWED, null, request);
+	ResponseEntity<ApiErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException exception,
+			HttpServletRequest request) {
+		return error(HttpStatus.METHOD_NOT_ALLOWED, "Method is not supported for this endpoint", request);
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)

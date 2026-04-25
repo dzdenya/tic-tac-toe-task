@@ -34,18 +34,7 @@ class GlobalExceptionHandler {
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
 	ResponseEntity<ApiErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException exception,
 															HttpServletRequest request) {
-		String message = "Method %s is not supported for this endpoint. Use one of: %s"
-				.formatted(exception.getMethod(), supportedMethods(exception, request));
-		return error(HttpStatus.METHOD_NOT_ALLOWED, message, request);
-	}
-
-	private String supportedMethods(HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
-		if ("GET".equals(exception.getMethod()) && request.getRequestURI().endsWith("/simulate")) {
-			return "POST";
-		}
-		return exception.getSupportedMethods() == null
-				? "none"
-				: String.join(", ", exception.getSupportedMethods());
+		return error(HttpStatus.METHOD_NOT_ALLOWED, "Method is not supported for this endpoint", request);
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)

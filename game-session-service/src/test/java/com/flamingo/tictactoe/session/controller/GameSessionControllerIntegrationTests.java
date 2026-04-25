@@ -113,8 +113,7 @@ class GameSessionControllerIntegrationTests {
 
 		assertThat(response.statusCode()).isEqualTo(405);
 		assertThat(json(response, "$.status")).isEqualTo(405);
-		assertThat((String) json(response, "$.message")).contains("Method GET is not supported");
-		assertThat((String) json(response, "$.message")).contains("POST");
+		assertThat(json(response, "$.message")).isEqualTo("Method is not supported for this endpoint");
 	}
 
 	@Test

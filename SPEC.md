@@ -65,7 +65,7 @@ Responsibilities:
 - Use the session ID as the game ID when communicating with the Game Engine Service.
 - Generate automated moves for players `X` and `O`.
 - Alternate turns between players.
-- Forward moves to the Game Engine Service.
+- Forward moves to the Game Engine Service through a Spring Cloud OpenFeign client.
 - Store session status and move history.
 - Stop simulation when the Game Engine Service reports a win or draw.
 - Expose session details to the UI.
@@ -82,7 +82,7 @@ Responsibilities:
 - Show winner when available.
 - Show move history.
 - Present backend or communication errors.
-- Refresh game state during or after simulation.
+- Replay returned move history with a short delay so the automated game progress is visible.
 - Communicate with the Game Session Service only.
 
 ## 4. Domain Model
@@ -335,11 +335,13 @@ Expected status codes:
 
 - `400 BAD_REQUEST`: invalid move, invalid player, invalid board position, completed game mutation.
 - `404 NOT_FOUND`: unknown game or session.
+- `404 NOT_FOUND`: unknown endpoint.
+- `405 METHOD_NOT_ALLOWED`: unsupported HTTP method for an existing endpoint.
 - `409 CONFLICT`: simulation requested for a session that is already simulating or completed.
 - `502 BAD_GATEWAY`: Game Session Service cannot communicate with Game Engine Service.
 - `500 INTERNAL_SERVER_ERROR`: unexpected server error.
 
-Each service should use a global exception handler with `@ControllerAdvice`.
+Each service should use a global exception handler with `@ControllerAdvice`. Unexpected `500` errors should be logged with method, path, and stack trace. Expected client errors such as `400`, `404`, `405`, and `409` should return consistent JSON responses without being logged as unexpected server failures.
 
 ## 7. State Management
 
@@ -382,6 +384,8 @@ The initial UI will be implemented as a separate plain HTML, CSS, and JavaScript
 
 The UI should call only the Game Session Service. The Game Engine Service remains an internal backend dependency of the Game Session Service.
 
+The Game Session Service should allow local UI access through CORS for development.
+
 ### Initial Screen
 
 - Show an empty 3x3 board.
@@ -393,7 +397,8 @@ The UI should call only the Game Session Service. The Game Engine Service remain
 1. User clicks `Start Simulation`.
 2. UI calls `POST /sessions` on the Game Session Service.
 3. UI calls `POST /sessions/{sessionId}/simulate` on the Game Session Service.
-4. UI renders the returned final game state and move history.
+4. UI replays the returned move history step by step with a short delay between moves.
+5. UI renders the final game status and board.
 
 ### Optional Live Flow
 
@@ -417,6 +422,8 @@ If SSE or WebSockets are implemented:
 - Detects diagonal wins.
 - Detects draw.
 - Rejects moves after game completion.
+- Returns `404` for unknown endpoints.
+- Returns `405` for unsupported HTTP methods.
 
 ### Game Session Service Tests
 
@@ -427,11 +434,13 @@ If SSE or WebSockets are implemented:
 - Stops when the engine reports a terminal status.
 - Handles Game Engine Service communication failures.
 - Rejects simulation for unknown or completed sessions.
+- Returns `404` for unknown endpoints.
+- Returns `405` for unsupported HTTP methods.
 
 ### Integration Tests
 
 - Full flow: create session, simulate game, verify terminal game outcome.
-- REST communication between Game Session Service and Game Engine Service.
+- OpenFeign communication between Game Session Service and Game Engine Service.
 - Error response shape for representative invalid requests.
 
 ## 11. Implementation Constraints
@@ -441,7 +450,10 @@ If SSE or WebSockets are implemented:
 - Use Spring Boot 4.0.6.
 - Use Gradle 9.4.1 with Groovy DSL.
 - Use package name `com.flamingo.tictactoe`.
-- Organize code by feature/domain where practical.
+- Organize each service by layer (`controller`, `service`, `repository`, `model`, `dto`, `exception`, and service-specific `config` where needed).
+- Use Spring Cloud OpenFeign for Game Session Service to Game Engine Service communication.
+- Use Lombok where it reduces boilerplate without hiding business logic.
+- Use Spotless for Java formatting.
 - Use constructor injection and `private final` fields.
 - Use DTOs for API input and output.
 - Do not expose persistence or internal domain objects directly through controllers.
@@ -471,7 +483,7 @@ If SSE or WebSockets are implemented:
 ### Milestone 3: Game Session
 
 - Implement session creation.
-- Implement REST client for Game Engine Service.
+- Implement OpenFeign client for Game Engine Service.
 - Implement automated simulation.
 - Store move history.
 - Add service and integration tests.
@@ -503,6 +515,6 @@ If SSE or WebSockets are implemented:
   - `game-engine-service` on port `8081`
   - `game-session-service` on port `8082`
 - Use H2 in-memory databases for both backend services.
-- Use REST communication from Game Session Service to Game Engine Service.
+- Use Spring Cloud OpenFeign communication from Game Session Service to Game Engine Service.
 - Use a separate plain HTML/CSS/JS browser UI for the first version.
-- Use request-response simulation first; add SSE only if time remains.
+- Use request-response simulation first and replay returned moves in the UI; add SSE only if time remains.
