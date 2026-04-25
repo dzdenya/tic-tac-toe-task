@@ -6,6 +6,7 @@ const statusText = document.querySelector('#statusText');
 const sessionText = document.querySelector('#sessionText');
 const moveHistory = document.querySelector('#moveHistory');
 const errorText = document.querySelector('#errorText');
+const moveDelayMs = 700;
 
 function renderBoard(board = emptyBoard()) {
   boardElement.replaceChildren();
@@ -78,15 +79,35 @@ async function startSimulation() {
     statusText.textContent = 'Simulating';
 
     const result = await postJson(`/sessions/${session.sessionId}/simulate`);
+    await playMoves(result.moves);
     statusText.textContent = formatStatus(result.game?.status ?? result.status, result.game?.winner);
     renderBoard(result.game?.board);
-    renderMoves(result.moves);
   } catch (error) {
     statusText.textContent = 'Failed';
     errorText.textContent = error.message;
   } finally {
     startButton.disabled = false;
   }
+}
+
+async function playMoves(moves = []) {
+  const board = emptyBoard();
+  renderBoard(board);
+  renderMoves();
+
+  for (const move of moves) {
+    statusText.textContent = `Turn ${move.turn}: ${move.player}`;
+    board[move.row][move.col] = move.player;
+    renderBoard(board);
+    renderMoves(moves.slice(0, move.turn));
+    await sleep(moveDelayMs);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function formatStatus(status, winner) {
