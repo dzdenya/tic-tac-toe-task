@@ -105,6 +105,29 @@ class GameSessionControllerIntegrationTests {
 		assertThat(json(response, "$.message")).isEqualTo("Session is already completed");
 	}
 
+	@Test
+	void rejectsGetForSimulationEndpoint() throws Exception {
+		String sessionId = (String) json(post("/sessions"), "$.sessionId");
+
+		HttpResponse<String> response = get("/sessions/" + sessionId + "/simulate");
+
+		assertThat(response.statusCode()).isEqualTo(405);
+		assertThat(json(response, "$.status")).isEqualTo(405);
+		assertThat((String) json(response, "$.message")).contains("Method GET is not supported");
+		assertThat((String) json(response, "$.message")).contains("POST");
+	}
+
+	@Test
+	void returnsNotFoundForUnknownEndpoint() throws Exception {
+		String sessionId = (String) json(post("/sessions"), "$.sessionId");
+
+		HttpResponse<String> response = get("/sessions/" + sessionId + "/simulates");
+
+		assertThat(response.statusCode()).isEqualTo(404);
+		assertThat(json(response, "$.status")).isEqualTo(404);
+		assertThat(json(response, "$.message")).isEqualTo("No endpoint found for GET /sessions/" + sessionId + "/simulates");
+	}
+
 	private HttpResponse<String> get(String path) throws IOException, InterruptedException {
 		HttpRequest request = HttpRequest.newBuilder(uri(path))
 				.GET()

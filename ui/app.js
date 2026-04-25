@@ -32,7 +32,7 @@ function renderMoves(moves = []) {
 
   moves.forEach((move) => {
     const item = document.createElement('li');
-    item.textContent = `${move.turn}. ${move.player} -> row ${move.row}, col ${move.col} (${move.resultingStatus})`;
+    item.textContent = `${move.player} -> row ${move.row}, col ${move.col} (${formatStatus(move.resultingStatus)})`;
     moveHistory.append(item);
   });
 }

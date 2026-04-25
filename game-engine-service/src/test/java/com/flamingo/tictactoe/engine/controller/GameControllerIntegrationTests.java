@@ -60,6 +60,15 @@ class GameControllerIntegrationTests {
 	}
 
 	@Test
+	void returnsNotFoundForUnknownEndpoint() throws Exception {
+		HttpResponse<String> response = get("/games");
+
+		assertThat(response.statusCode()).isEqualTo(404);
+		assertThat(json(response, "$.status")).isEqualTo(404);
+		assertThat(json(response, "$.message")).isEqualTo("No endpoint found for GET /games");
+	}
+
+	@Test
 	void rejectsMoveOutsideBoard() throws Exception {
 		String gameId = newGameId();
 

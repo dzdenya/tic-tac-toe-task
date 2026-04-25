@@ -2,40 +2,17 @@ package com.flamingo.tictactoe.session.service;
 
 import com.flamingo.tictactoe.session.dto.EngineMoveRequest;
 import com.flamingo.tictactoe.session.dto.GameResponse;
-import com.flamingo.tictactoe.session.exception.EngineCommunicationException;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 
-@Component
-class GameEngineClient {
+@FeignClient(name = "game-engine", url = "${game-engine.base-url}")
+interface GameEngineClient {
 
-	private final RestClient gameEngineRestClient;
+	@PostMapping("/games/{gameId}/move")
+	GameResponse submitMove(@PathVariable String gameId, EngineMoveRequest request);
 
-	GameEngineClient(RestClient gameEngineRestClient) {
-		this.gameEngineRestClient = gameEngineRestClient;
-	}
-
-	GameResponse submitMove(String gameId, EngineMoveRequest request) {
-		try {
-			return gameEngineRestClient.post()
-					.uri("/games/{gameId}/move", gameId)
-					.body(request)
-					.retrieve()
-					.body(GameResponse.class);
-		} catch (RestClientException exception) {
-			throw new EngineCommunicationException("Game Engine Service request failed", exception);
-		}
-	}
-
-	GameResponse getGame(String gameId) {
-		try {
-			return gameEngineRestClient.get()
-					.uri("/games/{gameId}", gameId)
-					.retrieve()
-					.body(GameResponse.class);
-		} catch (RestClientException exception) {
-			throw new EngineCommunicationException("Game Engine Service request failed", exception);
-		}
-	}
+	@GetMapping("/games/{gameId}")
+	GameResponse getGame(@PathVariable String gameId);
 }

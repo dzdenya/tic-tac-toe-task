@@ -4,6 +4,7 @@ import com.flamingo.tictactoe.session.dto.EngineMoveRequest;
 import com.flamingo.tictactoe.session.dto.GameResponse;
 import com.flamingo.tictactoe.session.dto.SessionMoveResponse;
 import com.flamingo.tictactoe.session.dto.SessionResponse;
+import com.flamingo.tictactoe.session.exception.EngineCommunicationException;
 import com.flamingo.tictactoe.session.exception.SessionConflictException;
 import com.flamingo.tictactoe.session.exception.SessionNotFoundException;
 import com.flamingo.tictactoe.session.model.GameSessionEntity;
@@ -11,34 +12,40 @@ import com.flamingo.tictactoe.session.model.MoveEntity;
 import com.flamingo.tictactoe.session.model.PlayerSymbol;
 import com.flamingo.tictactoe.session.model.SessionStatus;
 import com.flamingo.tictactoe.session.repository.GameSessionRepository;
+import feign.FeignException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 public class GameSessionService {
 
 	private final GameSessionRepository gameSessionRepository;
 	private final GameEngineClient gameEngineClient;
 
-	public GameSessionService(GameSessionRepository gameSessionRepository, GameEngineClient gameEngineClient) {
+	public GameSessionService(GameSessionRepository gameSessionRepository,
+							GameEngineClient gameEngineClient) {
 		this.gameSessionRepository = gameSessionRepository;
 		this.gameEngineClient = gameEngineClient;
 	}
 
 	@Transactional
 	public SessionResponse createSession() {
-		GameSessionEntity session = gameSessionRepository.save(new GameSessionEntity(UUID.randomUUID().toString()));
+		GameSessionEntity session = gameSessionRepository.save(
+				new GameSessionEntity(UUID.randomUUID().toString())
+		);
 		return toResponse(session, null);
 	}
 
 	@Transactional(readOnly = true)
 	public SessionResponse getSession(String sessionId) {
 		GameSessionEntity session = findSession(sessionId);
-		GameResponse game = session.getMoves().isEmpty() ? null : gameEngineClient.getGame(session.getGameId());
+		GameResponse game = session.getMoves().isEmpty() ? null : getGame(session.getGameId());
 		return toResponse(session, game);
 	}
 
@@ -59,8 +66,14 @@ public class GameSessionService {
 
 		while (game == null || !game.status().isTerminal()) {
 			Cell move = chooseMove(game);
-			game = gameEngineClient.submitMove(session.getGameId(),
-					new EngineMoveRequest(currentPlayer, move.row(), move.col()));
+			game = submitMove(
+					session.getGameId(),
+					new EngineMoveRequest(
+							currentPlayer,
+							move.row(),
+							move.col()
+					)
+			);
 			session.addMove(new MoveEntity(session.getMoves().size() + 1, currentPlayer, move.row(), move.col(),
 					game.status()));
 			currentPlayer = currentPlayer.next();
@@ -68,6 +81,24 @@ public class GameSessionService {
 
 		session.setStatus(SessionStatus.COMPLETED);
 		return toResponse(gameSessionRepository.save(session), game);
+	}
+
+	private GameResponse getGame(String gameId) {
+		try {
+			log.info("Getting game from engine: {}", gameId);
+			return gameEngineClient.getGame(gameId);
+		} catch (FeignException exception) {
+			throw new EngineCommunicationException("Game Engine Service request failed", exception);
+		}
+	}
+
+	private GameResponse submitMove(String gameId, EngineMoveRequest request) {
+		try {
+			log.info("Submitting move to engine: {}", request);
+			return gameEngineClient.submitMove(gameId, request);
+		} catch (FeignException exception) {
+			throw new EngineCommunicationException("Game Engine Service request failed", exception);
+		}
 	}
 
 	private GameSessionEntity findSession(String sessionId) {
