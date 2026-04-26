@@ -174,6 +174,7 @@ Validation errors:
 - Unknown player symbol.
 - Row or column outside the board.
 - Target cell already occupied.
+- Same player attempts to move twice in a row.
 - Move attempted after game completion.
 
 #### GET `/games/{gameId}`
@@ -417,6 +418,7 @@ If SSE or WebSockets are implemented:
 - Accepts valid moves.
 - Rejects moves outside the board.
 - Rejects moves to occupied cells.
+- Rejects the same player moving twice in a row.
 - Detects row wins.
 - Detects column wins.
 - Detects diagonal wins.
@@ -505,6 +507,7 @@ If SSE or WebSockets are implemented:
 
 - Whether to use random moves only or a simple rule-based strategy.
 - Whether to implement live updates in the first version or keep the initial UI request-response based.
+- Follow-up improvements are tracked separately in `IMPROVEMENT_PLAN.md` so this specification stays focused on the current implementation contract.
 
 ## 14. Proposed Initial Decisions
 

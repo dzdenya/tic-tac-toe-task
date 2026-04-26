@@ -1,0 +1,24 @@
+services:
+  game-engine-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: game-engine-service
+    container_name: flamingo-game-engine-service
+    ports:
+      - "8081:8081"
+
+  game-session-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: game-session-service
+    container_name: flamingo-game-session-service
+    depends_on:
+      - game-engine-service
+    environment:
+      GAME_ENGINE_BASE_URL: http://game-engine-service:8081
+    ports:
+      - "8082:8082"

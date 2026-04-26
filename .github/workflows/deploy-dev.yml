@@ -1,0 +1,87 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - "build.gradle"
+      - "settings.gradle"
+      - "gradlew"
+      - "gradlew.bat"
+      - "gradle/**"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".dockerignore"
+      - "game-engine-service/**"
+      - "game-session-service/**"
+      - ".github/workflows/deploy-dev.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+env:
+  DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '141.144.230.191' }}
+  DEPLOY_USER: ${{ vars.DEPLOY_USER || 'opc' }}
+  DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/opc/flamingo-task-tic-tac-toe' }}
+
+jobs:
+  deploy:
+    name: Build and Deploy to Dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build and test
+        run: ./gradlew build --no-daemon
+
+      - name: Validate Docker Compose
+        run: docker compose config
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          install -m 600 /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload source bundle
+        run: |
+          release_dir="$DEPLOY_PATH/releases/$GITHUB_SHA"
+          tar \
+            --exclude='.git' \
+            --exclude='.gradle' \
+            --exclude='build' \
+            --exclude='**/build' \
+            --exclude='.idea' \
+            --exclude='*.iml' \
+            -czf app.tar.gz .
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$release_dir'"
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" app.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:$release_dir/app.tar.gz"
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "tar -xzf '$release_dir/app.tar.gz' -C '$release_dir' && rm '$release_dir/app.tar.gz'"
+
+      - name: Start services
+        run: |
+          release_dir="$DEPLOY_PATH/releases/$GITHUB_SHA"
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$release_dir' && docker compose -p flamingo-task-tic-tac-toe up -d --build && ln -sfn '$release_dir' '$DEPLOY_PATH/current'"

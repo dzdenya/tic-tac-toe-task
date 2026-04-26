@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    paths-ignore:
+      - "ui/**"
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "ui/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Gradle Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build and test
+        run: ./gradlew build --no-daemon
+
+      - name: Validate Docker Compose
+        run: docker compose config

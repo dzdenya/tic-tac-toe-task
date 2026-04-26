@@ -1,0 +1,10 @@
+.gradle
+build
+**/build
+.git
+.idea
+*.iml
+ui
+README.md
+SPEC.md
+IMPROVEMENT_PLAN.md
