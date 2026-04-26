@@ -35,18 +35,6 @@ GitHub Actions workflows:
 - `UI Pages`: can deploy the static `ui` directory to GitHub Pages on `dev` when files under `ui/**` change, but GitHub Pages requires a supported repository plan and Pages source configuration.
 - `Deploy Dev`: on `dev`, builds and tests backend or UI changes, uploads the source bundle to the dev server over SSH, and runs `docker compose -p tic-tac-toe up -d --build` on the server.
 
-Required GitHub secret for dev deploy:
-
-- `DEPLOY_SSH_KEY`: private SSH key for the deploy user.
-
-Optional GitHub variables for dev deploy:
-
-- `DEPLOY_HOST`: defaults to `141.144.230.191`.
-- `DEPLOY_USER`: defaults to `opc`.
-- `DEPLOY_PORT`: defaults to `22`.
-- `DEPLOY_PATH`: defaults to `/home/opc/tic-tac-toe`.
-- `COMPOSE_PROJECT_NAME`: defaults to `tic-tac-toe`.
-
 ## Format
 
 ```bash

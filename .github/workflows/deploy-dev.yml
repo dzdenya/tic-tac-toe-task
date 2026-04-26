@@ -27,11 +27,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '141.144.230.191' }}
-  DEPLOY_USER: ${{ vars.DEPLOY_USER || 'opc' }}
-  DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/opc/tic-tac-toe' }}
-  COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME || 'tic-tac-toe' }}
+  DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+  DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+  DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+  COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME }}
 
 jobs:
   deploy:
@@ -41,6 +41,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        run: |
+          test -n "$DEPLOY_HOST" || { echo "DEPLOY_HOST variable is required"; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "DEPLOY_USER variable is required"; exit 1; }
+          test -n "$DEPLOY_PORT" || { echo "DEPLOY_PORT variable is required"; exit 1; }
+          test -n "$DEPLOY_PATH" || { echo "DEPLOY_PATH variable is required"; exit 1; }
+          test -n "$COMPOSE_PROJECT_NAME" || { echo "COMPOSE_PROJECT_NAME variable is required"; exit 1; }
+          test -n "${{ secrets.DEPLOY_SSH_KEY }}" || { echo "DEPLOY_SSH_KEY secret is required"; exit 1; }
 
       - name: Set up Java
         uses: actions/setup-java@v4
