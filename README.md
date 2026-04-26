@@ -32,7 +32,7 @@ GitHub Actions workflows:
 
 - `CI`: runs the backend Gradle build and validates Docker Compose. UI-only and documentation-only changes are ignored.
 - `UI Pages`: deploys the static `ui` directory to GitHub Pages on `dev` when files under `ui/**` change.
-- `Deploy Dev`: on `dev`, builds and tests backend changes, uploads the source bundle to the dev server over SSH, and runs `docker compose -p flamingo-task-tic-tac-toe up -d --build` on the server.
+- `Deploy Dev`: on `dev`, builds and tests backend changes, uploads the source bundle to the dev server over SSH, and runs `docker compose -p tic-tac-toe up -d --build` on the server.
 
 Required GitHub secret for dev deploy:
 
@@ -43,7 +43,8 @@ Optional GitHub variables for dev deploy:
 - `DEPLOY_HOST`: defaults to `141.144.230.191`.
 - `DEPLOY_USER`: defaults to `opc`.
 - `DEPLOY_PORT`: defaults to `22`.
-- `DEPLOY_PATH`: defaults to `/home/opc/flamingo-task-tic-tac-toe`.
+- `DEPLOY_PATH`: defaults to `/home/opc/tic-tac-toe`.
+- `COMPOSE_PROJECT_NAME`: defaults to `tic-tac-toe`.
 
 ## Format
 

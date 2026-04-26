@@ -12,7 +12,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = 'flamingo-task-tic-tac-toe'
+rootProject.name = 'tic-tac-toe'
 
 include 'game-engine-service'
 include 'game-session-service'

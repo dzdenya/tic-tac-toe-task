@@ -451,7 +451,7 @@ If SSE or WebSockets are implemented:
 - Use Java 25.
 - Use Spring Boot 4.0.6.
 - Use Gradle 9.4.1 with Groovy DSL.
-- Use package name `com.flamingo.tictactoe`.
+- Use package name `com.tictactoe`.
 - Organize each service by layer (`controller`, `service`, `repository`, `model`, `dto`, `exception`, and service-specific `config` where needed).
 - Use Spring Cloud OpenFeign for Game Session Service to Game Engine Service communication.
 - Use Lombok where it reduces boilerplate without hiding business logic.
@@ -513,7 +513,7 @@ If SSE or WebSockets are implemented:
 
 - Use a Gradle multi-project repository.
 - Use Java 25, Spring Boot 4.0.6, and Gradle 9.4.1 with Groovy DSL.
-- Use package name `com.flamingo.tictactoe`.
+- Use package name `com.tictactoe`.
 - Use two Spring Boot services:
   - `game-engine-service` on port `8081`
   - `game-session-service` on port `8082`

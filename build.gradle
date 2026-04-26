@@ -5,7 +5,7 @@ plugins {
 }
 
 subprojects {
-    group = 'com.flamingo.tictactoe'
+    group = 'com.tictactoe'
     version = '0.0.1-SNAPSHOT'
 
     apply plugin: 'java'

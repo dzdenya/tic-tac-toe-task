@@ -29,7 +29,8 @@ env:
   DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '141.144.230.191' }}
   DEPLOY_USER: ${{ vars.DEPLOY_USER || 'opc' }}
   DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/opc/flamingo-task-tic-tac-toe' }}
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/opc/tic-tac-toe' }}
+  COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME || 'tic-tac-toe' }}
 
 jobs:
   deploy:
@@ -84,4 +85,4 @@ jobs:
         run: |
           release_dir="$DEPLOY_PATH/releases/$GITHUB_SHA"
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$release_dir' && docker compose -p flamingo-task-tic-tac-toe up -d --build && ln -sfn '$release_dir' '$DEPLOY_PATH/current'"
+            "cd '$release_dir' && docker compose -p '$COMPOSE_PROJECT_NAME' up -d --build && ln -sfn '$release_dir' '$DEPLOY_PATH/current'"
