@@ -1,6 +1,16 @@
 name: tic-tac-toe
 
 services:
+  ui:
+    image: nginx:alpine
+    container_name: tic-tac-toe-ui
+    depends_on:
+      - game-session-service
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+
   game-engine-service:
     build:
       context: .

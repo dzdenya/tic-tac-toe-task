@@ -13,6 +13,7 @@ on:
       - "Dockerfile"
       - "docker-compose.yml"
       - ".dockerignore"
+      - "ui/**"
       - "game-engine-service/**"
       - "game-session-service/**"
       - ".github/workflows/deploy-dev.yml"

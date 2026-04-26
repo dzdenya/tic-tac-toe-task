@@ -15,24 +15,24 @@ This document tracks improvements beyond the current baseline implementation des
 
 - Docker Compose starts both backend services with one command.
 - GitHub Actions runs the Gradle build and validates Docker Compose configuration on push and pull request.
-- GitHub Actions deploys the static UI to GitHub Pages when `ui/**` changes on `dev`.
-- GitHub Actions can deploy backend services to the dev server over SSH on `dev`.
+- GitHub Actions can deploy backend services and the static UI to the dev server over SSH on `dev`.
+- Docker Compose serves the UI through nginx.
+- The GitHub Pages workflow is retained as an optional path for repositories where Pages is supported and enabled.
 
 ### 1. Add a One-Command Local Startup Option
 
 Current state:
 
 - Docker Compose starts both backend services with one command.
-- UI is still opened separately from `ui/index.html`.
+- Docker Compose serves the static UI through nginx.
 
 Remaining improvement:
 
 - Optionally add Gradle tasks or scripts if a non-Docker startup shortcut is useful.
-- Optionally serve the static UI from a lightweight local server or document a browser-friendly file workflow.
 
 Acceptance criteria:
 
-- A reviewer can start both backend services with `docker compose up --build`.
+- A reviewer can start both backend services and the UI with `docker compose up --build`.
 - README includes the exact command sequence.
 
 ### 2. Add API Examples for Both Services

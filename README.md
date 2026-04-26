@@ -14,7 +14,8 @@ See [SPEC.md](SPEC.md) for the working specification and [IMPROVEMENT_PLAN.md](I
 
 - Game Engine Service: `http://localhost:8081`
 - Game Session Service: `http://localhost:8082`
-- UI: open `ui/index.html` in a browser.
+- UI through Docker Compose: `http://localhost:8080`
+- UI local file fallback: open `ui/index.html` in a browser.
 
 ## Build
 
@@ -31,8 +32,8 @@ GitHub Actions runs the same Gradle build on push and pull request, and also val
 GitHub Actions workflows:
 
 - `CI`: runs the backend Gradle build and validates Docker Compose. UI-only and documentation-only changes are ignored.
-- `UI Pages`: deploys the static `ui` directory to GitHub Pages on `dev` when files under `ui/**` change.
-- `Deploy Dev`: on `dev`, builds and tests backend changes, uploads the source bundle to the dev server over SSH, and runs `docker compose -p tic-tac-toe up -d --build` on the server.
+- `UI Pages`: can deploy the static `ui` directory to GitHub Pages on `dev` when files under `ui/**` change, but GitHub Pages requires a supported repository plan and Pages source configuration.
+- `Deploy Dev`: on `dev`, builds and tests backend or UI changes, uploads the source bundle to the dev server over SSH, and runs `docker compose -p tic-tac-toe up -d --build` on the server.
 
 Required GitHub secret for dev deploy:
 
@@ -57,20 +58,22 @@ Optional GitHub variables for dev deploy:
 
 ### Run with Docker Compose
 
-Start both backend services:
+Start the UI and both backend services:
 
 ```bash
 docker compose up --build
 ```
 
-Then open `ui/index.html`.
+Then open `http://localhost:8080`.
 
 Docker Compose maps:
 
+- UI: `http://localhost:8080`
 - Game Engine Service: `http://localhost:8081`
 - Game Session Service: `http://localhost:8082`
 
 The Game Session Service calls the Game Engine Service through the internal Compose service name `game-engine-service`.
+The UI is served by nginx and calls the Game Session Service on the same hostname with port `8082`.
 
 ### Run Locally with Gradle
 
@@ -88,7 +91,9 @@ Run the session service:
 
 Then open `ui/index.html`.
 
-The UI calls `http://localhost:8082`, and the Game Session Service calls the Game Engine Service at `http://localhost:8081`.
+When opened directly as a local file, the UI calls `http://localhost:8082`. When served over HTTP, the UI calls the same hostname with port `8082`.
+
+The Game Session Service calls the Game Engine Service at `http://localhost:8081` in local Gradle mode.
 
 The UI displays the returned move history step by step with a short delay so the automated game is visible instead of appearing instantly.
 

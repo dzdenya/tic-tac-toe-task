@@ -1,4 +1,4 @@
-const apiBaseUrl = 'http://localhost:8082';
+const apiBaseUrl = resolveApiBaseUrl();
 
 const boardElement = document.querySelector('#board');
 const startButton = document.querySelector('#startButton');
@@ -7,6 +7,18 @@ const sessionText = document.querySelector('#sessionText');
 const moveHistory = document.querySelector('#moveHistory');
 const errorText = document.querySelector('#errorText');
 const moveDelayMs = 700;
+
+function resolveApiBaseUrl() {
+  if (window.TICTACTOE_API_BASE_URL) {
+    return window.TICTACTOE_API_BASE_URL;
+  }
+
+  if (window.location.protocol.startsWith('http') && window.location.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:8082`;
+  }
+
+  return 'http://localhost:8082';
+}
 
 function renderBoard(board = emptyBoard()) {
   boardElement.replaceChildren();

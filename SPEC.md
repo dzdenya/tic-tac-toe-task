@@ -83,6 +83,7 @@ Responsibilities:
 - Show move history.
 - Present backend or communication errors.
 - Replay returned move history with a short delay so the automated game progress is visible.
+- Be served locally or in deployment through an nginx container.
 - Communicate with the Game Session Service only.
 
 ## 4. Domain Model
