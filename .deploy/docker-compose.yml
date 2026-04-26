@@ -15,7 +15,7 @@ services:
       - "traefik.docker.network=web"
       - "traefik.http.routers.tic-tac-toe-ui.rule=Host(`denys-task-flamingo.duckdns.org`) && (Path(`/tic-tac-toe`) || PathPrefix(`/tic-tac-toe/`))"
       - "traefik.http.routers.tic-tac-toe-ui.entrypoints=websecure"
-      - "traefik.http.routers.tic-tac-toe-ui.priority=10"
+      - "traefik.http.routers.tic-tac-toe-ui.priority=100"
       - "traefik.http.routers.tic-tac-toe-ui.tls.certresolver=le"
       - "traefik.http.services.tic-tac-toe-ui.loadbalancer.server.port=80"
 
@@ -46,7 +46,7 @@ services:
       - "traefik.docker.network=web"
       - "traefik.http.routers.tic-tac-toe-api.rule=Host(`denys-task-flamingo.duckdns.org`) && (Path(`/tic-tac-toe-api`) || PathPrefix(`/tic-tac-toe-api/`))"
       - "traefik.http.routers.tic-tac-toe-api.entrypoints=websecure"
-      - "traefik.http.routers.tic-tac-toe-api.priority=100"
+      - "traefik.http.routers.tic-tac-toe-api.priority=200"
       - "traefik.http.routers.tic-tac-toe-api.tls.certresolver=le"
       - "traefik.http.routers.tic-tac-toe-api.middlewares=tic-tac-toe-api-strip-prefix"
       - "traefik.http.middlewares.tic-tac-toe-api-strip-prefix.stripprefix.prefixes=/tic-tac-toe-api"
