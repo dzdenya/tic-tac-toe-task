@@ -14,6 +14,10 @@ function resolveApiBaseUrl() {
   }
 
   if (window.location.protocol.startsWith('http') && window.location.hostname) {
+    if (window.location.pathname.startsWith('/tic-tac-toe')) {
+      return `${window.location.origin}/tic-tac-toe-api`;
+    }
+
     return `${window.location.protocol}//${window.location.hostname}:8082`;
   }
 

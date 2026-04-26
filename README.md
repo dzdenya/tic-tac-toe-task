@@ -33,7 +33,7 @@ GitHub Actions workflows:
 
 - `CI`: runs the backend Gradle build and validates Docker Compose. UI-only and documentation-only changes are ignored.
 - `UI Pages`: can deploy the static `ui` directory to GitHub Pages on `dev` when files under `ui/**` change, but GitHub Pages requires a supported repository plan and Pages source configuration.
-- `Deploy Dev`: on `dev`, builds and tests backend or UI changes, uploads the source bundle to the dev server over SSH, and runs `docker compose -p tic-tac-toe up -d --build` on the server.
+- `Deploy Dev`: on `dev`, builds and tests backend or UI changes, uploads the source bundle to the dev server over SSH, and runs the Traefik-oriented Docker Compose file on the server.
 
 ## Format
 
@@ -62,6 +62,13 @@ Docker Compose maps:
 
 The Game Session Service calls the Game Engine Service through the internal Compose service name `game-engine-service`.
 The UI is served by nginx and calls the Game Session Service on the same hostname with port `8082`.
+
+### Deploy with Traefik
+
+The dev deployment uses `.deploy/docker-compose.yml`, which connects the UI and session API to the external Traefik `web` network and routes:
+
+- UI: `https://denys-task-flamingo.duckdns.org/tic-tac-toe/`
+- API: `https://denys-task-flamingo.duckdns.org/tic-tac-toe-api`
 
 ### Run Locally with Gradle
 
