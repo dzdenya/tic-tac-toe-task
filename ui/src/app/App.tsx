@@ -163,7 +163,7 @@ export default function App() {
               className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold shadow-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               <Play className="w-5 h-5" />
-              {gameState === 'idle' ? 'Start Simulation' : 'Restart Simulation'}
+              Start simulation
             </motion.button>
           </div>
 

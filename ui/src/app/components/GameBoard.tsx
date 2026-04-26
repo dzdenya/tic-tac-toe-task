@@ -10,10 +10,13 @@ const cellSize = 128;
 const gapSize = 12;
 const cellStep = cellSize + gapSize;
 const boardSize = cellSize * 3 + gapSize * 2;
-const lineWidth = cellSize * 3 + gapSize * 2 - 24;
+const lineThickness = 8;
+const lineOverhang = 24;
 
 export function GameBoard({ board, winningLine }: GameBoardProps) {
-  const winningLineStyle = winningLine ? getWinningLineStyle(winningLine) : null;
+  const lineStyle = winningLine ? getWinningLineStyle(winningLine) : null;
+  const winningPlayer = winningLine ? board[winningLine[0]] : null;
+  const lineColor = winningPlayer === 'X' ? 'bg-blue-600' : 'bg-red-600';
 
   return (
     <div className="relative" style={{ width: boardSize, height: boardSize }}>
@@ -57,14 +60,19 @@ export function GameBoard({ board, winningLine }: GameBoardProps) {
         })}
       </div>
 
-      {winningLineStyle && (
-        <motion.div
-          className="absolute left-0 top-0 z-10 h-2 rounded-full bg-green-600 shadow-lg shadow-green-500/40"
-          initial={{ scaleX: 0, opacity: 0 }}
-          animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ delay: 0.15, duration: 0.45, ease: 'easeOut' }}
-          style={winningLineStyle}
-        />
+      {lineStyle && (
+        <div
+          className="absolute left-0 top-0 pointer-events-none h-2"
+          style={lineStyle}
+        >
+          <motion.div
+            className={`h-full w-full rounded-full ${lineColor}`}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.5, delay: 0.3, ease: 'easeOut' }}
+            style={{ transformOrigin: 'left center' }}
+          />
+        </div>
       )}
     </div>
   );
@@ -74,15 +82,18 @@ function getWinningLineStyle(winningLine: number[]) {
   const [start, , end] = winningLine;
   const startPoint = getCellCenter(start);
   const endPoint = getCellCenter(end);
-  const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x) * (180 / Math.PI);
-  const centerX = (startPoint.x + endPoint.x) / 2;
-  const centerY = (startPoint.y + endPoint.y) / 2;
+  const deltaX = endPoint.x - startPoint.x;
+  const deltaY = endPoint.y - startPoint.y;
+  const distance = Math.hypot(deltaX, deltaY);
+  const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+  const unitX = deltaX / distance;
+  const unitY = deltaY / distance;
 
   return {
-    width: lineWidth,
-    x: centerX - lineWidth / 2,
-    y: centerY - 4,
-    rotate: angle,
+    width: distance + lineOverhang * 2,
+    transform: `translate(${startPoint.x - unitX * lineOverhang}px, ${
+      startPoint.y - unitY * lineOverhang - lineThickness / 2
+    }px) rotate(${angle}deg)`,
     transformOrigin: 'left center',
   };
 }
