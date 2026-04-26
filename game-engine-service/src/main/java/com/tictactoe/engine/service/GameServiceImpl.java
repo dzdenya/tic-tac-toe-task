@@ -14,6 +14,13 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Transactional implementation of the game engine rules.
+ *
+ * <p>The service is stateless; all mutable game data is loaded from and saved to
+ * {@link GameRepository}. Move submission is synchronized to prevent concurrent
+ * requests in the same JVM from applying conflicting turns.</p>
+ */
 @Service
 public class GameServiceImpl implements GameService {
 
@@ -66,6 +73,9 @@ public class GameServiceImpl implements GameService {
 		return toResponse(gameRepository.save(game));
 	}
 
+	/**
+	 * Evaluates terminal game states after a valid move has been applied.
+	 */
 	private void updateOutcome(GameEntity game) {
 		String cells = game.getCells();
 

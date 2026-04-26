@@ -21,6 +21,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Transactional implementation of automated tic-tac-toe sessions.
+ *
+ * <p>This service owns session lifecycle and move history persistence, while the
+ * game engine service remains the source of truth for board validation and final
+ * game outcomes.</p>
+ */
 @Slf4j
 @Service
 public class GameSessionServiceImpl implements GameSessionService {
@@ -87,6 +94,10 @@ public class GameSessionServiceImpl implements GameSessionService {
 		return toResponse(gameSessionRepository.save(session), game);
 	}
 
+	/**
+	 * Retrieves the current board from the engine and converts transport failures
+	 * into the session service's domain exception model.
+	 */
 	private GameResponse getGame(String gameId) {
 		try {
 			log.info("Getting game from engine: {}", gameId);
@@ -96,6 +107,9 @@ public class GameSessionServiceImpl implements GameSessionService {
 		}
 	}
 
+	/**
+	 * Sends a session move request to the engine service.
+	 */
 	private GameResponse submitMove(String gameId, EngineMoveRequest request) {
 		try {
 			log.info("Submitting move to engine: {}", request);
@@ -117,6 +131,9 @@ public class GameSessionServiceImpl implements GameSessionService {
 		return session.getMoves().getLast().getPlayer().next();
 	}
 
+	/**
+	 * Selects a random legal move from the latest known engine board.
+	 */
 	private Cell chooseMove(GameResponse game) {
 		List<Cell> emptyCells = emptyCells(game);
 		Collections.shuffle(emptyCells);
