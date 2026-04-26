@@ -9,7 +9,7 @@ services:
     networks:
       - web
     volumes:
-      - ../ui:/usr/share/nginx/html:ro
+      - ../ui:/usr/share/nginx/html/tic-tac-toe:ro
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
@@ -17,8 +17,6 @@ services:
       - "traefik.http.routers.tic-tac-toe-ui.entrypoints=websecure"
       - "traefik.http.routers.tic-tac-toe-ui.priority=10"
       - "traefik.http.routers.tic-tac-toe-ui.tls.certresolver=le"
-      - "traefik.http.routers.tic-tac-toe-ui.middlewares=tic-tac-toe-ui-strip-prefix"
-      - "traefik.http.middlewares.tic-tac-toe-ui-strip-prefix.stripprefix.prefixes=/tic-tac-toe"
       - "traefik.http.services.tic-tac-toe-ui.loadbalancer.server.port=80"
 
   game-engine-service:
