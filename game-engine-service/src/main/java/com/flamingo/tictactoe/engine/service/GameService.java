@@ -50,6 +50,10 @@ public class GameService {
 			throw new InvalidMoveException("Game is already completed");
 		}
 
+		if (request.player() == game.getLastPlayer()) {
+			throw new InvalidMoveException("Player cannot move twice in a row");
+		}
+
 		if (!game.isCellEmpty(request.row(), request.col())) {
 			throw new InvalidMoveException("Cell is already occupied");
 		}

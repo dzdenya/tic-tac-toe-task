@@ -120,6 +120,17 @@ class GameControllerIntegrationTests {
 	}
 
 	@Test
+	void rejectsSamePlayerMovingTwiceInARow() throws Exception {
+		String gameId = newGameId();
+		assertThat(move(gameId, "X", 0, 0).statusCode()).isEqualTo(200);
+
+		HttpResponse<String> response = move(gameId, "X", 0, 1);
+
+		assertThat(response.statusCode()).isEqualTo(400);
+		assertThat(json(response, "$.message")).isEqualTo("Player cannot move twice in a row");
+	}
+
+	@Test
 	void detectsRowWin() throws Exception {
 		String gameId = newGameId();
 
