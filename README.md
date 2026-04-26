@@ -1,6 +1,6 @@
 # Distributed Tic Tac Toe Microservices
 
-Distributed Tic Tac Toe home assignment built with Java 25, Spring Boot 4.0.6, Gradle 9.4.1, H2, and a separate plain HTML/CSS/JS UI.
+Distributed Tic Tac Toe home assignment built with Java 25, Spring Boot 4.0.6, Gradle 9.4.1, H2, and a separate React/Vite UI.
 
 See [SPEC.md](SPEC.md) for the working specification and [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) for the prioritized follow-up plan.
 
@@ -8,14 +8,14 @@ See [SPEC.md](SPEC.md) for the working specification and [IMPROVEMENT_PLAN.md](I
 
 - `game-engine-service`: owns board state, move validation, and game outcome calculation.
 - `game-session-service`: owns sessions, automated move simulation, and communication with the engine through Spring Cloud OpenFeign.
-- `ui`: separate plain HTML/CSS/JS browser UI.
+- `ui`: separate React/Vite browser UI based on the Figma Make design sample.
 
 ## Local Ports
 
 - Game Engine Service: `http://localhost:8081`
 - Game Session Service: `http://localhost:8082`
 - UI through Docker Compose: `http://localhost:8080`
-- UI local file fallback: open `ui/index.html` in a browser.
+- UI through Vite dev server: `http://localhost:5173`
 
 ## Build
 
@@ -32,7 +32,7 @@ GitHub Actions runs the same Gradle build on push and pull request, and also val
 GitHub Actions workflows:
 
 - `CI`: runs the backend Gradle build and validates Docker Compose. UI-only and documentation-only changes are ignored.
-- `UI Pages`: can deploy the static `ui` directory to GitHub Pages on `dev` when files under `ui/**` change, but GitHub Pages requires a supported repository plan and Pages source configuration.
+- `UI Pages`: builds the Vite UI and can deploy `ui/dist` to GitHub Pages on `dev`, but GitHub Pages requires a supported repository plan and Pages source configuration.
 - `Deploy Dev`: on `dev`, builds and tests backend or UI changes, uploads the source bundle to the dev server over SSH, and runs the Traefik-oriented Docker Compose file on the server.
 
 ## Format
@@ -70,7 +70,7 @@ The dev deployment uses `.deploy/docker-compose.yml`, which connects the UI and 
 - UI: `https://denys-task-flamingo.duckdns.org/tic-tac-toe/`
 - API: `https://denys-task-flamingo.duckdns.org/tic-tac-toe-api`
 
-### Run Locally with Gradle
+### Run Locally with Gradle and Vite
 
 Run the engine:
 
@@ -84,9 +84,17 @@ Run the session service:
 ./gradlew :game-session-service:bootRun
 ```
 
-Then open `ui/index.html`.
+Install and run the UI dev server:
 
-When opened directly as a local file, the UI calls `http://localhost:8082`. When served over HTTP, the UI calls the same hostname with port `8082`.
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+Then open `http://localhost:5173`.
+
+When served from localhost, the UI calls `http://localhost:8082`.
 
 The Game Session Service calls the Game Engine Service at `http://localhost:8081` in local Gradle mode.
 

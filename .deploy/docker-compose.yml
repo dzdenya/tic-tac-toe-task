@@ -2,14 +2,13 @@ name: tic-tac-toe
 
 services:
   ui:
-    image: nginx:alpine
+    build:
+      context: ../ui
     container_name: tic-tac-toe-ui
     depends_on:
       - game-session-service
     networks:
       - web
-    volumes:
-      - ../ui:/usr/share/nginx/html/tic-tac-toe:ro
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"

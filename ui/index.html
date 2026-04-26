@@ -1,41 +1,14 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Distributed Tic Tac Toe</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <main class="app">
-    <header class="header">
-      <div>
-        <p class="eyebrow">Distributed simulation</p>
-        <h1>Tic Tac Toe</h1>
-      </div>
-      <button id="startButton" type="button">Start Simulation</button>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tic Tac Toe Simulation</title>
+    <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+  </head>
 
-    <section class="status-panel" aria-live="polite">
-      <span>Status</span>
-      <strong id="statusText">Ready</strong>
-    </section>
-
-    <section class="session-panel">
-      <span>Session</span>
-      <strong id="sessionText">Not started</strong>
-    </section>
-
-    <section id="board" class="board" aria-label="Tic Tac Toe board"></section>
-
-    <section class="history-panel">
-      <h2>Move History</h2>
-      <ol id="moveHistory"></ol>
-    </section>
-
-    <p id="errorText" class="error" role="alert"></p>
-  </main>
-
-  <script src="app.js"></script>
-</body>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
