@@ -8,11 +8,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
 @FeignClient(name = "game-engine", url = "${game-engine.base-url}")
-interface GameEngineClient {
+public interface GameEngineClient {
 
 	@PostMapping("/games/{gameId}/move")
 	GameResponse submitMove(@PathVariable String gameId, EngineMoveRequest request);
 
 	@GetMapping("/games/{gameId}")
 	GameResponse getGame(@PathVariable String gameId);
+
 }

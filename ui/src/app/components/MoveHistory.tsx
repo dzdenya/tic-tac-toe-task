@@ -18,7 +18,7 @@ export function MoveHistory({ moves }: MoveHistoryProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 w-80 max-h-96 overflow-y-auto">
+    <div className="bg-white rounded-lg shadow-lg p-6 w-96 max-h-[520px] overflow-y-auto">
       <h3 className="font-semibold text-lg mb-4 text-gray-800">Move History</h3>
       {moves.length === 0 ? (
         <p className="text-gray-500 text-sm">No moves yet</p>
