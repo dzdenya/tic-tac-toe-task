@@ -79,6 +79,7 @@ jobs:
       - name: Upload source bundle
         run: |
           release_dir="$DEPLOY_PATH/releases/$GITHUB_SHA"
+          bundle="$RUNNER_TEMP/app.tar.gz"
           tar \
             --exclude='.git' \
             --exclude='.gradle' \
@@ -86,9 +87,9 @@ jobs:
             --exclude='**/build' \
             --exclude='.idea' \
             --exclude='*.iml' \
-            -czf app.tar.gz .
+            -czf "$bundle" .
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$release_dir'"
-          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" app.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:$release_dir/app.tar.gz"
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" "$bundle" "$DEPLOY_USER@$DEPLOY_HOST:$release_dir/app.tar.gz"
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "tar -xzf '$release_dir/app.tar.gz' -C '$release_dir' && rm '$release_dir/app.tar.gz'"
 
       - name: Start services
