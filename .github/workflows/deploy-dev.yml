@@ -12,7 +12,9 @@ on:
       - "gradle/**"
       - "Dockerfile"
       - "docker-compose.yml"
+      - ".deploy/docker-compose.yml"
       - ".dockerignore"
+      - "ui/**"
       - "game-engine-service/**"
       - "game-session-service/**"
       - ".github/workflows/deploy-dev.yml"
@@ -26,11 +28,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '141.144.230.191' }}
-  DEPLOY_USER: ${{ vars.DEPLOY_USER || 'opc' }}
-  DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/opc/tic-tac-toe' }}
-  COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME || 'tic-tac-toe' }}
+  DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+  DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+  DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+  COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME }}
 
 jobs:
   deploy:
@@ -40,6 +42,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        run: |
+          test -n "$DEPLOY_HOST" || { echo "DEPLOY_HOST variable is required"; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "DEPLOY_USER variable is required"; exit 1; }
+          test -n "$DEPLOY_PORT" || { echo "DEPLOY_PORT variable is required"; exit 1; }
+          test -n "$DEPLOY_PATH" || { echo "DEPLOY_PATH variable is required"; exit 1; }
+          test -n "$COMPOSE_PROJECT_NAME" || { echo "COMPOSE_PROJECT_NAME variable is required"; exit 1; }
+          test -n "${{ secrets.DEPLOY_SSH_KEY }}" || { echo "DEPLOY_SSH_KEY secret is required"; exit 1; }
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -56,8 +67,11 @@ jobs:
       - name: Build and test
         run: ./gradlew build --no-daemon
 
-      - name: Validate Docker Compose
+      - name: Validate local Docker Compose
         run: docker compose config
+
+      - name: Validate deploy Docker Compose
+        run: docker compose -f .deploy/docker-compose.yml config
 
       - name: Configure SSH
         run: |
@@ -69,6 +83,7 @@ jobs:
       - name: Upload source bundle
         run: |
           release_dir="$DEPLOY_PATH/releases/$GITHUB_SHA"
+          bundle="$RUNNER_TEMP/app.tar.gz"
           tar \
             --exclude='.git' \
             --exclude='.gradle' \
@@ -76,13 +91,13 @@ jobs:
             --exclude='**/build' \
             --exclude='.idea' \
             --exclude='*.iml' \
-            -czf app.tar.gz .
+            -czf "$bundle" .
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$release_dir'"
-          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" app.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:$release_dir/app.tar.gz"
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" "$bundle" "$DEPLOY_USER@$DEPLOY_HOST:$release_dir/app.tar.gz"
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "tar -xzf '$release_dir/app.tar.gz' -C '$release_dir' && rm '$release_dir/app.tar.gz'"
 
       - name: Start services
         run: |
           release_dir="$DEPLOY_PATH/releases/$GITHUB_SHA"
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$release_dir' && docker compose -p '$COMPOSE_PROJECT_NAME' up -d --build && ln -sfn '$release_dir' '$DEPLOY_PATH/current'"
+            "cd '$release_dir' && docker compose -p '$COMPOSE_PROJECT_NAME' -f .deploy/docker-compose.yml up -d --build && ln -sfn '$release_dir' '$DEPLOY_PATH/current'"

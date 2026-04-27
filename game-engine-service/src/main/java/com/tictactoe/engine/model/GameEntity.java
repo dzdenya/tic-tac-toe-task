@@ -1,24 +1,31 @@
 package com.tictactoe.engine.model;
 
+import com.tictactoe.engine.domain.Board;
+import com.tictactoe.engine.domain.GameResult;
+import com.tictactoe.engine.exception.InvalidMoveException;
 import jakarta.persistence.*;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.ToString;
 
 @Entity
 @Getter
-@Setter
 @ToString
 @Table(name = "games")
 public class GameEntity {
 
-	static final String EMPTY_BOARD = "---------";
+	private static final String EMPTY_BOARD = "---------";
 
 	@Id
 	private String id;
 
+	@Version
+	private Long version;
+
 	@Column(nullable = false, length = 9)
 	private String cells;
+
+	@Transient
+	private Board board;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
@@ -31,7 +38,6 @@ public class GameEntity {
 	private PlayerSymbol lastPlayer;
 
 	private Integer lastRow;
-
 	private Integer lastCol;
 
 	protected GameEntity() {
@@ -40,29 +46,66 @@ public class GameEntity {
 	public GameEntity(String id) {
 		this.id = id;
 		this.cells = EMPTY_BOARD;
+		this.board = Board.empty();
 		this.status = GameStatus.IN_PROGRESS;
 	}
 
-	public void applyMove(PlayerSymbol player, int row, int col) {
-		int index = toIndex(row, col);
-		StringBuilder updatedCells = new StringBuilder(cells);
-		updatedCells.setCharAt(index, player.name().charAt(0));
-		this.cells = updatedCells.toString();
+	@PostLoad
+	private void loadBoard() {
+		this.board = Board.fromString(this.cells);
+	}
+
+	@PrePersist
+	@PreUpdate
+	private void syncCells() {
+		if (board != null) {
+			this.cells = board.asString();
+		}
+	}
+
+	public void makeMove(PlayerSymbol player, int row, int col) {
+		ensureBoardInitialized();
+
+		validateGameNotFinished();
+		validateFirstMove(player);
+		validateTurn(player);
+
+		this.board = board.makeMove(player, row, col);
+
 		this.lastPlayer = player;
 		this.lastRow = row;
 		this.lastCol = col;
+
+		updateOutcome();
 	}
 
-	public void complete(GameStatus status, PlayerSymbol winner) {
-		this.status = status;
-		this.winner = winner;
+	private void updateOutcome() {
+		GameResult result = board.evaluate();
+		this.status = result.status();
+		this.winner = result.winner();
 	}
 
-	public boolean isCellEmpty(int row, int col) {
-		return cells.charAt(toIndex(row, col)) == '-';
+	private void validateGameNotFinished() {
+		if (status.isTerminal()) {
+			throw new InvalidMoveException("Game is already completed");
+		}
 	}
 
-	private static int toIndex(int row, int col) {
-		return row * 3 + col;
+	private void validateFirstMove(PlayerSymbol player) {
+		if (lastPlayer == null && player != PlayerSymbol.X) {
+			throw new InvalidMoveException("Player X must make the first move");
+		}
+	}
+
+	private void validateTurn(PlayerSymbol player) {
+		if (player == lastPlayer) {
+			throw new InvalidMoveException("Player cannot move twice in a row");
+		}
+	}
+
+	private void ensureBoardInitialized() {
+		if (board == null) {
+			this.board = Board.fromString(this.cells);
+		}
 	}
 }

@@ -1,0 +1,56 @@
+name: tic-tac-toe
+
+services:
+  ui:
+    build:
+      context: ../ui
+    container_name: tic-tac-toe-ui
+    depends_on:
+      - game-session-service
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.tic-tac-toe-ui.rule=Host(`denys-task-flamingo.duckdns.org`) && (Path(`/tic-tac-toe`) || PathPrefix(`/tic-tac-toe/`))"
+      - "traefik.http.routers.tic-tac-toe-ui.entrypoints=websecure"
+      - "traefik.http.routers.tic-tac-toe-ui.priority=100"
+      - "traefik.http.routers.tic-tac-toe-ui.tls.certresolver=le"
+      - "traefik.http.services.tic-tac-toe-ui.loadbalancer.server.port=80"
+
+  game-engine-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: game-engine-service
+    container_name: tic-tac-toe-game-engine-service
+
+  game-session-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: game-session-service
+    container_name: tic-tac-toe-game-session-service
+    depends_on:
+      - game-engine-service
+    environment:
+      GAME_ENGINE_BASE_URL: http://game-engine-service:8081
+    networks:
+      - default
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.tic-tac-toe-api.rule=Host(`denys-task-flamingo.duckdns.org`) && (Path(`/tic-tac-toe-api`) || PathPrefix(`/tic-tac-toe-api/`))"
+      - "traefik.http.routers.tic-tac-toe-api.entrypoints=websecure"
+      - "traefik.http.routers.tic-tac-toe-api.priority=200"
+      - "traefik.http.routers.tic-tac-toe-api.tls.certresolver=le"
+      - "traefik.http.routers.tic-tac-toe-api.middlewares=tic-tac-toe-api-strip-prefix"
+      - "traefik.http.middlewares.tic-tac-toe-api-strip-prefix.stripprefix.prefixes=/tic-tac-toe-api"
+      - "traefik.http.services.tic-tac-toe-api.loadbalancer.server.port=8082"
+
+networks:
+  web:
+    external: true

@@ -8,3 +8,5 @@ out/
 *.iml
 
 .DS_Store
+/ui/dist/
+/ui/node_modules/

@@ -18,6 +18,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterAll;
@@ -61,8 +64,22 @@ class GameSessionControllerIntegrationTests {
 		assertThat(json(response, "$.sessionId")).isNotNull();
 		assertThat(json(response, "$.gameId")).isEqualTo(json(response, "$.sessionId"));
 		assertThat(json(response, "$.status")).isEqualTo("CREATED");
-		assertThat(json(response, "$.game")).isNull();
+		assertThat(json(response, "$.game.gameId")).isEqualTo(json(response, "$.sessionId"));
+		assertThat(json(response, "$.game.status")).isEqualTo("IN_PROGRESS");
+		assertThat(json(response, "$.game.lastMove")).isNull();
+		assertThat(json(response, "$.game.board[0][0]")).isNull();
 		assertThat((List<?>) json(response, "$.moves")).isEmpty();
+	}
+
+	@Test
+	void returnsBadGatewayWhenEngineCannotInitializeGame() throws Exception {
+		ENGINE.failNextCreate();
+
+		HttpResponse<String> response = post("/sessions");
+
+		assertThat(response.statusCode()).isEqualTo(502);
+		assertThat(json(response, "$.status")).isEqualTo(502);
+		assertThat(json(response, "$.message")).isEqualTo("Engine unavailable");
 	}
 
 	@Test
@@ -106,6 +123,68 @@ class GameSessionControllerIntegrationTests {
 	}
 
 	@Test
+	void rejectsConcurrentSimulationForSameSession() throws Exception {
+		String sessionId = (String) json(post("/sessions"), "$.sessionId");
+		ENGINE.delayNextMove();
+
+		CompletableFuture<HttpResponse<String>> firstSimulation = postAsync("/sessions/" + sessionId + "/simulate");
+		ENGINE.awaitDelayedMove();
+
+		CompletableFuture<HttpResponse<String>> secondSimulation = postAsync("/sessions/" + sessionId + "/simulate");
+		ENGINE.releaseDelayedMove();
+		HttpResponse<String> secondResponse = secondSimulation.get(5, TimeUnit.SECONDS);
+		HttpResponse<String> firstResponse = firstSimulation.get(15, TimeUnit.SECONDS);
+
+		assertThat(firstResponse.statusCode()).isEqualTo(200);
+		assertThat(secondResponse.statusCode()).isEqualTo(409);
+		assertThat(json(secondResponse, "$.message")).isEqualTo("Session is already simulating");
+	}
+
+	@Test
+	void marksSessionFailedWhenEngineFailsDuringSimulation() throws Exception {
+		String sessionId = (String) json(post("/sessions"), "$.sessionId");
+		ENGINE.failNextMove();
+
+		HttpResponse<String> response = post("/sessions/" + sessionId + "/simulate");
+
+		assertThat(response.statusCode()).isEqualTo(502);
+
+		HttpResponse<String> lookup = get("/sessions/" + sessionId);
+		assertThat(lookup.statusCode()).isEqualTo(200);
+		assertThat(json(lookup, "$.status")).isEqualTo("FAILED");
+	}
+
+	@Test
+	void marksSessionFailedWhenEngineRejectsNonRetryableMove() throws Exception {
+		String sessionId = (String) json(post("/sessions"), "$.sessionId");
+		ENGINE.rejectNextMove("Player cannot move twice in a row");
+
+		HttpResponse<String> response = post("/sessions/" + sessionId + "/simulate");
+
+		assertThat(response.statusCode()).isEqualTo(502);
+		assertThat(json(response, "$.message")).isEqualTo("Engine rejected move: Player cannot move twice in a row");
+
+		HttpResponse<String> lookup = get("/sessions/" + sessionId);
+		assertThat(lookup.statusCode()).isEqualTo(200);
+		assertThat(json(lookup, "$.status")).isEqualTo("FAILED");
+	}
+
+	@Test
+	void streamsSimulationEvents() throws Exception {
+		String sessionId = (String) json(post("/sessions"), "$.sessionId");
+
+		HttpResponse<String> response = get("/sessions/" + sessionId + "/events");
+
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(response.headers().firstValue("content-type")).hasValueSatisfying(contentType ->
+				assertThat(contentType).contains("text/event-stream"));
+		assertThat(response.body()).contains("event:move");
+		assertThat(response.body()).contains("event:completed");
+		assertThat(response.body()).contains("\"type\":\"move\"");
+		assertThat(response.body()).contains("\"type\":\"completed\"");
+	}
+
+	@Test
 	void rejectsGetForSimulationEndpoint() throws Exception {
 		String sessionId = (String) json(post("/sessions"), "$.sessionId");
 
@@ -141,6 +220,13 @@ class GameSessionControllerIntegrationTests {
 		return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 	}
 
+	private CompletableFuture<HttpResponse<String>> postAsync(String path) {
+		HttpRequest request = HttpRequest.newBuilder(uri(path))
+				.POST(HttpRequest.BodyPublishers.noBody())
+				.build();
+		return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+	}
+
 	private URI uri(String path) {
 		return URI.create("http://localhost:%d%s".formatted(port, path));
 	}
@@ -167,6 +253,11 @@ class GameSessionControllerIntegrationTests {
 
 		private HttpServer server;
 		private final Map<String, GameSnapshot> games = new HashMap<>();
+		private boolean failNextCreate;
+		private boolean failNextMove;
+		private String nextMoveRejection;
+		private volatile CountDownLatch delayedMoveStarted;
+		private volatile CountDownLatch delayedMoveRelease;
 
 		void start() {
 			try {
@@ -186,7 +277,42 @@ class GameSessionControllerIntegrationTests {
 			return "http://localhost:%d".formatted(server.getAddress().getPort());
 		}
 
+		void failNextCreate() {
+			this.failNextCreate = true;
+		}
+
+		void failNextMove() {
+			this.failNextMove = true;
+		}
+
+		void rejectNextMove(String message) {
+			this.nextMoveRejection = message;
+		}
+
+		void delayNextMove() {
+			delayedMoveStarted = new CountDownLatch(1);
+			delayedMoveRelease = new CountDownLatch(1);
+		}
+
+		void awaitDelayedMove() throws InterruptedException {
+			assertThat(delayedMoveStarted.await(5, TimeUnit.SECONDS)).isTrue();
+		}
+
+		void releaseDelayedMove() {
+			if (delayedMoveRelease != null) {
+				delayedMoveRelease.countDown();
+			}
+		}
+
 		private void handle(HttpExchange exchange) throws IOException {
+			try {
+				handleSafely(exchange);
+			} catch (Exception exception) {
+				write(exchange, 500, "{}");
+			}
+		}
+
+		private void handleSafely(HttpExchange exchange) throws IOException, InterruptedException {
 			String path = exchange.getRequestURI().getPath();
 			String gameId = path.split("/")[2];
 
@@ -200,12 +326,40 @@ class GameSessionControllerIntegrationTests {
 				return;
 			}
 
-			if (!"POST".equals(exchange.getRequestMethod()) || !path.endsWith("/move")) {
+			if (!"POST".equals(exchange.getRequestMethod())) {
 				write(exchange, 404, "{}");
 				return;
 			}
 
 			String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+
+			if (!path.endsWith("/move")) {
+				if (failNextCreate) {
+					failNextCreate = false;
+					write(exchange, 500, "{}");
+					return;
+				}
+				GameSnapshot game = games.computeIfAbsent(gameId,
+						ignored -> new GameSnapshot("---------".toCharArray(), null, null, null));
+				write(exchange, 200, response(gameId, game.board(), game.player(), game.row(), game.col()));
+				return;
+			}
+
+			awaitMoveReleaseIfNeeded();
+
+			if (failNextMove) {
+				failNextMove = false;
+				write(exchange, 500, "{}");
+				return;
+			}
+
+			if (nextMoveRejection != null) {
+				String message = nextMoveRejection;
+				nextMoveRejection = null;
+				write(exchange, 400, error(message));
+				return;
+			}
+
 			char[] board = boardFor(gameId);
 			String player = requiredMatch(PLAYER_PATTERN, body);
 			int row = Integer.parseInt(requiredMatch(ROW_PATTERN, body));
@@ -232,26 +386,37 @@ class GameSessionControllerIntegrationTests {
 			return board;
 		}
 
-		private String response(String gameId, char[] board, String player, int row, int col) {
+		private String response(String gameId, char[] board, String player, Integer row, Integer col) {
 			String status = status(board);
 			String winner = switch (status) {
 				case "X_WON" -> "\"X\"";
 				case "O_WON" -> "\"O\"";
 				default -> "null";
 			};
+			String lastMove = player == null ? "null" : """
+					{
+						"player": "%s",
+						"row": %d,
+						"col": %d
+					}
+					""".formatted(player, row, col);
 			return """
 					{
 					"gameId": "%s",
 					"board": %s,
 					"status": "%s",
 					"winner": %s,
-					"lastMove": {
-						"player": "%s",
-						"row": %d,
-						"col": %d
+					"lastMove": %s
 					}
+					""".formatted(gameId, boardJson(board), status, winner, lastMove);
+		}
+
+		private String error(String message) {
+			return """
+					{
+					"message": "%s"
 					}
-					""".formatted(gameId, boardJson(board), status, winner, player, row, col);
+					""".formatted(message);
 		}
 
 		private String status(char[] board) {
@@ -259,6 +424,11 @@ class GameSessionControllerIntegrationTests {
 				char first = board[line[0]];
 				if (first != '-' && first == board[line[1]] && first == board[line[2]]) {
 					return first == 'X' ? "X_WON" : "O_WON";
+				}
+			}
+			for (char cell : board) {
+				if (cell == '-') {
+					return "IN_PROGRESS";
 				}
 			}
 			return "DRAW";
@@ -293,7 +463,19 @@ class GameSessionControllerIntegrationTests {
 			exchange.close();
 		}
 
-		private record GameSnapshot(char[] board, String player, int row, int col) {
+		private void awaitMoveReleaseIfNeeded() throws InterruptedException {
+			CountDownLatch started = delayedMoveStarted;
+			CountDownLatch release = delayedMoveRelease;
+			if (started == null || release == null) {
+				return;
+			}
+			started.countDown();
+			assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+			delayedMoveStarted = null;
+			delayedMoveRelease = null;
+		}
+
+		private record GameSnapshot(char[] board, String player, Integer row, Integer col) {
 		}
 	}
 }

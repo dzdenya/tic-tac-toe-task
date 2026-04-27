@@ -2,17 +2,64 @@ package com.tictactoe.session.service;
 
 import com.tictactoe.session.dto.EngineMoveRequest;
 import com.tictactoe.session.dto.GameResponse;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
-@FeignClient(name = "game-engine", url = "${game-engine.base-url}")
-interface GameEngineClient {
+/**
+ * WebClient adapter used by the session service to delegate board validation and
+ * outcome calculation to the game engine service.
+ */
+@Component
+public class GameEngineClient {
 
-	@PostMapping("/games/{gameId}/move")
-	GameResponse submitMove(@PathVariable String gameId, EngineMoveRequest request);
+	private final WebClient webClient;
 
-	@GetMapping("/games/{gameId}")
-	GameResponse getGame(@PathVariable String gameId);
+	public GameEngineClient(@Value("${game-engine.base-url}") String gameEngineBaseUrl) {
+		this.webClient = WebClient.builder()
+				.baseUrl(gameEngineBaseUrl)
+				.build();
+	}
+
+	/**
+	 * Creates an empty engine game using the session id as the engine game id.
+	 *
+	 * @param gameId engine game identifier
+	 * @return initialized engine game state
+	 */
+	public Mono<GameResponse> createGame(String gameId) {
+		return webClient.post()
+				.uri("/games/{gameId}", gameId)
+				.retrieve()
+				.bodyToMono(GameResponse.class);
+	}
+
+	/**
+	 * Submits a move to the engine for validation and persistence.
+	 *
+	 * @param gameId  engine game identifier
+	 * @param request move payload
+	 * @return updated engine game state
+	 */
+	public Mono<GameResponse> submitMove(String gameId, EngineMoveRequest request) {
+		return webClient.post()
+				.uri("/games/{gameId}/move", gameId)
+				.bodyValue(request)
+				.retrieve()
+				.bodyToMono(GameResponse.class);
+	}
+
+	/**
+	 * Fetches the latest engine game state.
+	 *
+	 * @param gameId engine game identifier
+	 * @return current engine game state
+	 */
+	public Mono<GameResponse> getGame(String gameId) {
+		return webClient.get()
+				.uri("/games/{gameId}", gameId)
+				.retrieve()
+				.bodyToMono(GameResponse.class);
+	}
 }
