@@ -26,7 +26,6 @@ subprojects {
 
     spotless {
         java {
-            importOrder()
             removeUnusedImports()
             leadingSpacesToTabs()
         }
