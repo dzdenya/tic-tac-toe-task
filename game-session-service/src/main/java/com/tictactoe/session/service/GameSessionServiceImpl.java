@@ -7,13 +7,6 @@ import com.tictactoe.session.exception.SessionNotFoundException;
 import com.tictactoe.session.model.*;
 import com.tictactoe.session.repository.GameSessionRepository;
 import com.tictactoe.session.repository.MoveRepository;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -21,6 +14,15 @@ import org.springframework.web.reactive.function.client.WebClientException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Transactional implementation of automated tic-tac-toe sessions.
@@ -33,7 +35,7 @@ import reactor.core.publisher.Mono;
 @Service
 public class GameSessionServiceImpl implements GameSessionService {
 
-	private static final Pattern ERROR_MESSAGE_PATTERN = Pattern.compile("\"message\"\\s*:\\s*\"([^\"]*)\"");
+	private static final int BOARD_SIZE = 3;
 	private static final String OCCUPIED_CELL_MESSAGE = "Cell is already occupied";
 	private static final Duration MOVE_DELAY = Duration.ofMillis(500);
 
@@ -41,23 +43,25 @@ public class GameSessionServiceImpl implements GameSessionService {
 	private final MoveRepository moveRepository;
 	private final GameEngineClient gameEngineClient;
 	private final TransactionalOperator transactionalOperator;
+	private final ObjectMapper objectMapper;
 
 	public GameSessionServiceImpl(GameSessionRepository gameSessionRepository,
-			MoveRepository moveRepository,
-			GameEngineClient gameEngineClient,
-			TransactionalOperator transactionalOperator) {
+	                              MoveRepository moveRepository,
+	                              GameEngineClient gameEngineClient,
+	                              TransactionalOperator transactionalOperator,
+	                              ObjectMapper objectMapper) {
 		this.gameSessionRepository = gameSessionRepository;
 		this.moveRepository = moveRepository;
 		this.gameEngineClient = gameEngineClient;
 		this.transactionalOperator = transactionalOperator;
+		this.objectMapper = objectMapper;
 	}
 
 	@Override
 	public Mono<SessionResponse> createSession() {
 		String sessionId = UUID.randomUUID().toString();
 		GameSessionEntity session = new GameSessionEntity(sessionId, sessionId);
-		return gameEngineClient.createGame(sessionId)
-				.onErrorMap(WebClientException.class, this::engineUnavailable)
+		return createEngineGame(sessionId)
 				.flatMap(game -> gameSessionRepository.save(session)
 						.map(saved -> toResponse(saved, List.of(), game)));
 	}
@@ -65,9 +69,8 @@ public class GameSessionServiceImpl implements GameSessionService {
 	@Override
 	public Mono<SessionResponse> getSession(String sessionId) {
 		return findSessionData(sessionId)
-				.flatMap(sessionData -> gameEngineClient.getGame(sessionData.session().getGameId())
-						.map(game -> toResponse(sessionData, game))
-						.onErrorMap(WebClientException.class, this::engineUnavailable));
+				.flatMap(sessionData -> getEngineGame(sessionData.session().getGameId())
+						.map(game -> toResponse(sessionData, game)));
 	}
 
 	@Override
@@ -122,7 +125,7 @@ public class GameSessionServiceImpl implements GameSessionService {
 				new EngineMoveRequest(state.currentPlayer(), move.row(), move.col())
 		)
 				.map(game -> state.acceptedMove(game, move))
-				.switchIfEmpty(getGame(gameId).map(state::refreshedGame));
+				.switchIfEmpty(getEngineGame(gameId).map(state::refreshedGame));
 	}
 
 	private Flux<SessionEventResponse> toEvents(String sessionId, SimulationState state) {
@@ -172,24 +175,31 @@ public class GameSessionServiceImpl implements GameSessionService {
 	 */
 	private Mono<SessionResponse> completeSimulation(String sessionId, List<RecordedMove> recordedMoves, GameResponse game) {
 		return findSession(sessionId)
-				.flatMap(session -> {
-					session.setStatus(SessionStatus.COMPLETED);
-					Flux<MoveEntity> moves = Flux.fromIterable(recordedMoves)
-							.map(recordedMove -> new MoveEntity(
-									sessionId,
-									recordedMove.turn(),
-									recordedMove.player(),
-									recordedMove.move().row(),
-									recordedMove.move().col(),
-									recordedMove.resultingStatus()
-							));
-
-					return moveRepository.saveAll(moves)
-							.then(gameSessionRepository.save(session))
-							.then(findSessionData(sessionId))
-							.map(sessionData -> toResponse(sessionData, game));
-				})
+				.flatMap(session -> saveCompletedSession(session, recordedMoves)
+						.then(completedSessionResponse(sessionId, game)))
 				.as(transactionalOperator::transactional);
+	}
+
+	private Mono<Void> saveCompletedSession(GameSessionEntity session, List<RecordedMove> recordedMoves) {
+		session.setStatus(SessionStatus.COMPLETED);
+		return saveRecordedMoves(session.getId(), recordedMoves)
+				.then(gameSessionRepository.save(session))
+				.then();
+	}
+
+	private Mono<Void> saveRecordedMoves(String sessionId, List<RecordedMove> recordedMoves) {
+		return moveRepository.saveAll(toMoveEntities(sessionId, recordedMoves))
+				.then();
+	}
+
+	private Flux<MoveEntity> toMoveEntities(String sessionId, List<RecordedMove> recordedMoves) {
+		return Flux.fromIterable(recordedMoves)
+				.map(recordedMove -> toMoveEntity(sessionId, recordedMove));
+	}
+
+	private Mono<SessionResponse> completedSessionResponse(String sessionId, GameResponse game) {
+		return findSessionData(sessionId)
+				.map(sessionData -> toResponse(sessionData, game));
 	}
 
 	private Mono<Void> markSimulationFailed(String sessionId) {
@@ -204,20 +214,16 @@ public class GameSessionServiceImpl implements GameSessionService {
 				.as(transactionalOperator::transactional);
 	}
 
-	/**
-	 * Retrieves the current board from the engine and converts transport failures
-	 * into the session service's domain exception model.
-	 */
-	private Mono<GameResponse> getGame(String gameId) {
-		return gameEngineClient.getGame(gameId)
-				.onErrorMap(WebClientException.class, exception -> {
-					if (!(exception instanceof WebClientResponseException responseException)) {
-						return engineUnavailable(exception);
-					}
-					log.error("Engine getGame failed: status={}, body={}", responseException.getStatusCode(),
-							responseException.getResponseBodyAsString());
-					return engineUnavailable(responseException);
-				});
+	private Mono<GameResponse> createEngineGame(String gameId) {
+		return engineRequest("createGame", gameEngineClient.createGame(gameId));
+	}
+
+	private Mono<GameResponse> getEngineGame(String gameId) {
+		return engineRequest("getGame", gameEngineClient.getGame(gameId));
+	}
+
+	private Mono<GameResponse> engineRequest(String operation, Mono<GameResponse> request) {
+		return request.onErrorMap(WebClientException.class, exception -> engineUnavailable(operation, exception));
 	}
 
 	/**
@@ -226,32 +232,44 @@ public class GameSessionServiceImpl implements GameSessionService {
 	private Mono<GameResponse> submitMoveSafe(String gameId, EngineMoveRequest request) {
 		log.debug("Submitting move to engine: {}", request);
 		return gameEngineClient.submitMove(gameId, request)
-				.onErrorResume(WebClientResponseException.class, exception -> {
-					if (exception.getStatusCode().value() == 400) {
-						String message = errorMessage(exception);
-						if (OCCUPIED_CELL_MESSAGE.equals(message)) {
-							log.debug("Retryable invalid move: {}", request);
-							return Mono.empty();
-						}
-						return Mono.error(new EngineCommunicationException("Engine rejected move: " + message, exception));
-					}
-					log.error("Engine error: status={}, body={}", exception.getStatusCode(), exception.getResponseBodyAsString());
-					return Mono.error(new EngineCommunicationException("Engine unavailable", exception));
-				})
-				.onErrorMap(WebClientException.class, this::engineUnavailable);
+				.onErrorResume(WebClientResponseException.class,
+						exception -> handleMoveResponseException(request, exception))
+				.onErrorMap(WebClientException.class, exception -> engineUnavailable("submitMove", exception));
 	}
 
-	private EngineCommunicationException engineUnavailable(Throwable exception) {
+	private Mono<GameResponse> handleMoveResponseException(EngineMoveRequest request,
+	                                                       WebClientResponseException exception) {
+		if (exception.getStatusCode().value() != 400) {
+			return Mono.error(engineUnavailable("submitMove", exception));
+		}
+
+		String message = errorMessage(exception);
+		if (OCCUPIED_CELL_MESSAGE.equals(message)) {
+			log.debug("Retryable invalid move: {}", request);
+			return Mono.empty();
+		}
+		return Mono.error(new EngineCommunicationException("Engine rejected move: " + message, exception));
+	}
+
+	private EngineCommunicationException engineUnavailable(String operation, Throwable exception) {
+		if (exception instanceof WebClientResponseException responseException) {
+			log.error("Engine {} failed: status={}, body={}", operation, responseException.getStatusCode(),
+					responseException.getResponseBodyAsString());
+		}
 		return new EngineCommunicationException("Engine unavailable", exception);
 	}
 
 	private String errorMessage(WebClientResponseException exception) {
 		String body = exception.getResponseBodyAsString();
-		Matcher matcher = ERROR_MESSAGE_PATTERN.matcher(body);
-		if (matcher.find()) {
-			return matcher.group(1);
+		if (body.isBlank()) {
+			return "Invalid move";
 		}
-		return body.isBlank() ? "Invalid move" : body;
+		try {
+			JsonNode message = objectMapper.readTree(body).path("message");
+			return message.stringValueOpt().orElse(body);
+		} catch (JacksonException ignored) {
+			return body;
+		}
 	}
 
 	private Mono<GameSessionEntity> findSession(String sessionId) {
@@ -284,8 +302,8 @@ public class GameSessionServiceImpl implements GameSessionService {
 	private List<Cell> emptyCells(GameResponse game) {
 		List<Cell> emptyCells = new ArrayList<>();
 		if (game == null) {
-			for (int row = 0; row < 3; row++) {
-				for (int col = 0; col < 3; col++) {
+			for (int row = 0; row < BOARD_SIZE; row++) {
+				for (int col = 0; col < BOARD_SIZE; col++) {
 					emptyCells.add(new Cell(row, col));
 				}
 			}
@@ -327,6 +345,17 @@ public class GameSessionServiceImpl implements GameSessionService {
 
 	private SessionMoveResponse toMoveResponse(RecordedMove recordedMove) {
 		return new SessionMoveResponse(
+				recordedMove.turn(),
+				recordedMove.player(),
+				recordedMove.move().row(),
+				recordedMove.move().col(),
+				recordedMove.resultingStatus()
+		);
+	}
+
+	private MoveEntity toMoveEntity(String sessionId, RecordedMove recordedMove) {
+		return new MoveEntity(
+				sessionId,
 				recordedMove.turn(),
 				recordedMove.player(),
 				recordedMove.move().row(),
