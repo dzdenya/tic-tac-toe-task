@@ -3,7 +3,7 @@ name: UI Pages
 on:
   push:
     branches:
-      - dev
+      - main
     paths:
       - "ui/**"
       - ".github/workflows/pages.yml"

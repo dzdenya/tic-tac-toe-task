@@ -58,6 +58,8 @@ const winningLines = [
 ];
 
 const SERVER_UNAVAILABLE_MESSAGE = 'Server is not available, please try later again';
+const GITHUB_PAGES_HOSTNAME = 'dzdenya.github.io';
+const PRODUCTION_API_BASE_URL = 'https://denys-task-flamingo.duckdns.org/tic-tac-toe-api';
 
 export default function App() {
   const [board, setBoard] = useState<(string | null)[]>(Array(9).fill(null));
@@ -245,6 +247,10 @@ function resolveApiBaseUrl() {
   if (window.location.protocol.startsWith('http') && window.location.hostname) {
     if (isLocalHost(window.location.hostname)) {
       return `${window.location.protocol}//${window.location.hostname}:8082`;
+    }
+
+    if (window.location.hostname === GITHUB_PAGES_HOSTNAME) {
+      return PRODUCTION_API_BASE_URL;
     }
 
     if (window.location.pathname.startsWith('/tic-tac-toe')) {
