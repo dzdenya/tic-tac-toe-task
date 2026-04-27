@@ -4,6 +4,36 @@ Distributed Tic Tac Toe home assignment built with Java 25, Spring Boot 4.0.6, G
 
 See [SPEC.md](SPEC.md) for the working specification.
 
+A brief discussion of potential improvements is available in [IMPROVEMENTS.md](IMPROVEMENTS.md).
+
+## Quick Start
+
+The easiest way to build and run the complete application is one command from the repository root:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://localhost:8080
+```
+
+This starts the React UI, the Game Session Service, and the Game Engine Service. Use `Ctrl+C` to stop the application.
+
+## Prerequisites
+
+For the one-command Docker run:
+
+- Docker with Docker Compose v2
+
+For local development without Docker:
+
+- Java 25
+- Node.js 22 or newer
+- npm
+
 ## Modules
 
 - `game-engine-service`: owns board state, move validation, and game outcome calculation.
@@ -19,11 +49,21 @@ See [SPEC.md](SPEC.md) for the working specification.
 
 ## Build
 
+Build and test both backend services:
+
 ```bash
 ./gradlew build
 ```
 
 This runs compilation, Spotless formatting checks, and tests for both backend services.
+
+Build the frontend:
+
+```bash
+cd ui
+npm ci
+npm run build
+```
 
 GitHub Actions runs the same Gradle build on push and pull request, and also validates the Docker Compose configuration.
 
@@ -44,7 +84,7 @@ GitHub Actions workflows:
 
 ## Run
 
-### Run with Docker Compose
+### Option 1: Run Everything with One Command
 
 Start the UI and both backend services:
 
@@ -63,32 +103,27 @@ Docker Compose maps:
 The Game Session Service calls the Game Engine Service through the internal Compose service name `game-engine-service`.
 The UI is served by nginx and calls the Game Session Service on the same hostname with port `8082`.
 
-### Deploy with Traefik
+### Option 2: Run Locally with Gradle and Vite
 
-The dev deployment uses `.deploy/docker-compose.yml`, which connects the UI and session API to the external Traefik `web` network and routes:
+Run the backend services in two separate terminal windows.
 
-- UI: `https://denys-task-flamingo.duckdns.org/tic-tac-toe/`
-- API: `https://denys-task-flamingo.duckdns.org/tic-tac-toe-api`
-
-### Run Locally with Gradle and Vite
-
-Run the engine:
+Terminal 1, start the engine:
 
 ```bash
 ./gradlew :game-engine-service:bootRun
 ```
 
-Run the session service:
+Terminal 2, start the session service:
 
 ```bash
 ./gradlew :game-session-service:bootRun
 ```
 
-Install and run the UI dev server:
+Terminal 3, install dependencies and start the UI dev server:
 
 ```bash
 cd ui
-npm install
+npm ci
 npm run dev
 ```
 
@@ -99,6 +134,13 @@ When served from localhost, the UI calls `http://localhost:8082`.
 The Game Session Service calls the Game Engine Service at `http://localhost:8081` in local Gradle mode.
 
 The UI opens the session SSE stream and updates the board after each accepted move so the automated game is visible as it progresses.
+
+### Deploy with Traefik
+
+The dev deployment uses `.deploy/docker-compose.yml`, which connects the UI and session API to the external Traefik `web` network and routes:
+
+- UI: `https://denys-task-flamingo.duckdns.org/tic-tac-toe/`
+- API: `https://denys-task-flamingo.duckdns.org/tic-tac-toe-api`
 
 ## API
 
@@ -190,6 +232,27 @@ Run everything with:
 
 ```bash
 ./gradlew build
+```
+
+Run only backend tests:
+
+```bash
+./gradlew test
+```
+
+Run tests for one backend service:
+
+```bash
+./gradlew :game-engine-service:test
+./gradlew :game-session-service:test
+```
+
+Validate the frontend production build:
+
+```bash
+cd ui
+npm ci
+npm run build
 ```
 
 ## Notes

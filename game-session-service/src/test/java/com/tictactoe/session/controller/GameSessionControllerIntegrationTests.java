@@ -18,6 +18,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterAll;
@@ -120,6 +123,24 @@ class GameSessionControllerIntegrationTests {
 	}
 
 	@Test
+	void rejectsConcurrentSimulationForSameSession() throws Exception {
+		String sessionId = (String) json(post("/sessions"), "$.sessionId");
+		ENGINE.delayNextMove();
+
+		CompletableFuture<HttpResponse<String>> firstSimulation = postAsync("/sessions/" + sessionId + "/simulate");
+		ENGINE.awaitDelayedMove();
+
+		CompletableFuture<HttpResponse<String>> secondSimulation = postAsync("/sessions/" + sessionId + "/simulate");
+		ENGINE.releaseDelayedMove();
+		HttpResponse<String> secondResponse = secondSimulation.get(5, TimeUnit.SECONDS);
+		HttpResponse<String> firstResponse = firstSimulation.get(15, TimeUnit.SECONDS);
+
+		assertThat(firstResponse.statusCode()).isEqualTo(200);
+		assertThat(secondResponse.statusCode()).isEqualTo(409);
+		assertThat(json(secondResponse, "$.message")).isEqualTo("Session is already simulating");
+	}
+
+	@Test
 	void marksSessionFailedWhenEngineFailsDuringSimulation() throws Exception {
 		String sessionId = (String) json(post("/sessions"), "$.sessionId");
 		ENGINE.failNextMove();
@@ -199,6 +220,13 @@ class GameSessionControllerIntegrationTests {
 		return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 	}
 
+	private CompletableFuture<HttpResponse<String>> postAsync(String path) {
+		HttpRequest request = HttpRequest.newBuilder(uri(path))
+				.POST(HttpRequest.BodyPublishers.noBody())
+				.build();
+		return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+	}
+
 	private URI uri(String path) {
 		return URI.create("http://localhost:%d%s".formatted(port, path));
 	}
@@ -228,6 +256,8 @@ class GameSessionControllerIntegrationTests {
 		private boolean failNextCreate;
 		private boolean failNextMove;
 		private String nextMoveRejection;
+		private volatile CountDownLatch delayedMoveStarted;
+		private volatile CountDownLatch delayedMoveRelease;
 
 		void start() {
 			try {
@@ -259,6 +289,21 @@ class GameSessionControllerIntegrationTests {
 			this.nextMoveRejection = message;
 		}
 
+		void delayNextMove() {
+			delayedMoveStarted = new CountDownLatch(1);
+			delayedMoveRelease = new CountDownLatch(1);
+		}
+
+		void awaitDelayedMove() throws InterruptedException {
+			assertThat(delayedMoveStarted.await(5, TimeUnit.SECONDS)).isTrue();
+		}
+
+		void releaseDelayedMove() {
+			if (delayedMoveRelease != null) {
+				delayedMoveRelease.countDown();
+			}
+		}
+
 		private void handle(HttpExchange exchange) throws IOException {
 			try {
 				handleSafely(exchange);
@@ -267,7 +312,7 @@ class GameSessionControllerIntegrationTests {
 			}
 		}
 
-		private void handleSafely(HttpExchange exchange) throws IOException {
+		private void handleSafely(HttpExchange exchange) throws IOException, InterruptedException {
 			String path = exchange.getRequestURI().getPath();
 			String gameId = path.split("/")[2];
 
@@ -299,6 +344,8 @@ class GameSessionControllerIntegrationTests {
 				write(exchange, 200, response(gameId, game.board(), game.player(), game.row(), game.col()));
 				return;
 			}
+
+			awaitMoveReleaseIfNeeded();
 
 			if (failNextMove) {
 				failNextMove = false;
@@ -414,6 +461,18 @@ class GameSessionControllerIntegrationTests {
 			exchange.sendResponseHeaders(status, bytes.length);
 			exchange.getResponseBody().write(bytes);
 			exchange.close();
+		}
+
+		private void awaitMoveReleaseIfNeeded() throws InterruptedException {
+			CountDownLatch started = delayedMoveStarted;
+			CountDownLatch release = delayedMoveRelease;
+			if (started == null || release == null) {
+				return;
+			}
+			started.countDown();
+			assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+			delayedMoveStarted = null;
+			delayedMoveRelease = null;
 		}
 
 		private record GameSnapshot(char[] board, String player, Integer row, Integer col) {
