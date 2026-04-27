@@ -46,10 +46,10 @@ public class GameSessionServiceImpl implements GameSessionService {
 	private final ObjectMapper objectMapper;
 
 	public GameSessionServiceImpl(GameSessionRepository gameSessionRepository,
-	                              MoveRepository moveRepository,
-	                              GameEngineClient gameEngineClient,
-	                              TransactionalOperator transactionalOperator,
-	                              ObjectMapper objectMapper) {
+								MoveRepository moveRepository,
+								GameEngineClient gameEngineClient,
+								TransactionalOperator transactionalOperator,
+								ObjectMapper objectMapper) {
 		this.gameSessionRepository = gameSessionRepository;
 		this.moveRepository = moveRepository;
 		this.gameEngineClient = gameEngineClient;
@@ -238,7 +238,7 @@ public class GameSessionServiceImpl implements GameSessionService {
 	}
 
 	private Mono<GameResponse> handleMoveResponseException(EngineMoveRequest request,
-	                                                       WebClientResponseException exception) {
+														WebClientResponseException exception) {
 		if (exception.getStatusCode().value() != 400) {
 			return Mono.error(engineUnavailable("submitMove", exception));
 		}
