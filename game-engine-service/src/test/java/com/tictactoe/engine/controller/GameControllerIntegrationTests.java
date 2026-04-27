@@ -40,13 +40,13 @@ class GameControllerIntegrationTests {
 	@Test
 	void returnsExistingGameState() throws Exception {
 		String gameId = newGameId();
-		assertThat(move(gameId, "O", 1, 1).statusCode()).isEqualTo(200);
+		assertThat(move(gameId, "X", 1, 1).statusCode()).isEqualTo(200);
 
 		HttpResponse<String> response = get("/games/" + gameId);
 
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(json(response, "$.gameId")).isEqualTo(gameId);
-		assertThat(json(response, "$.board[1][1]")).isEqualTo("O");
+		assertThat(json(response, "$.board[1][1]")).isEqualTo("X");
 		assertThat(json(response, "$.status")).isEqualTo("IN_PROGRESS");
 	}
 
@@ -61,20 +61,39 @@ class GameControllerIntegrationTests {
 
 	@Test
 	void returnsNotFoundForUnknownEndpoint() throws Exception {
-		HttpResponse<String> response = get("/games");
+		HttpResponse<String> response = get("/games/" + newGameId() + "/unknown");
 
 		assertThat(response.statusCode()).isEqualTo(404);
 		assertThat(json(response, "$.status")).isEqualTo(404);
-		assertThat(json(response, "$.message")).isEqualTo("No endpoint found for GET /games");
+		assertThat((String) json(response, "$.message")).contains("No endpoint found for GET /games/");
 	}
 
 	@Test
-	void rejectsPostForGameLookupEndpoint() throws Exception {
-		HttpResponse<String> response = postJson("/games/1", "{}");
+	void createsGameWithProvidedId() throws Exception {
+		String gameId = newGameId();
 
-		assertThat(response.statusCode()).isEqualTo(405);
-		assertThat(json(response, "$.status")).isEqualTo(405);
-		assertThat(json(response, "$.message")).isEqualTo("Method is not supported for this endpoint");
+		HttpResponse<String> response = postJson("/games/" + gameId, "");
+
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(json(response, "$.gameId")).isEqualTo(gameId);
+		assertThat(json(response, "$.status")).isEqualTo("IN_PROGRESS");
+		assertThat(json(response, "$.winner")).isNull();
+		assertThat(json(response, "$.lastMove")).isNull();
+		assertThat(json(response, "$.board[0][0]")).isNull();
+	}
+
+	@Test
+	void creatingGameWithProvidedIdIsIdempotent() throws Exception {
+		String gameId = newGameId();
+		assertThat(postJson("/games/" + gameId, "").statusCode()).isEqualTo(200);
+		assertThat(move(gameId, "X", 1, 1).statusCode()).isEqualTo(200);
+
+		HttpResponse<String> response = postJson("/games/" + gameId, "");
+
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(json(response, "$.gameId")).isEqualTo(gameId);
+		assertThat(json(response, "$.board[1][1]")).isEqualTo("X");
+		assertThat(json(response, "$.lastMove.player")).isEqualTo("X");
 	}
 
 	@Test
@@ -106,6 +125,14 @@ class GameControllerIntegrationTests {
 
 		assertThat(response.statusCode()).isEqualTo(400);
 		assertThat(json(response, "$.message")).isEqualTo("Request body is invalid");
+	}
+
+	@Test
+	void rejectsWrongFirstPlayer() throws Exception {
+		HttpResponse<String> response = move(newGameId(), "O", 1, 1);
+
+		assertThat(response.statusCode()).isEqualTo(400);
+		assertThat(json(response, "$.message")).isEqualTo("Player X must make the first move");
 	}
 
 	@Test
@@ -166,10 +193,11 @@ class GameControllerIntegrationTests {
 	void detectsDiagonalWin() throws Exception {
 		String gameId = newGameId();
 
-		move(gameId, "O", 0, 0);
 		move(gameId, "X", 0, 1);
-		move(gameId, "O", 1, 1);
+		move(gameId, "O", 0, 0);
 		move(gameId, "X", 0, 2);
+		move(gameId, "O", 1, 1);
+		move(gameId, "X", 1, 0);
 
 		HttpResponse<String> response = move(gameId, "O", 2, 2);
 

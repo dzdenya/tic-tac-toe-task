@@ -16,6 +16,11 @@ class GameController {
 		this.gameService = gameService;
 	}
 
+	@PostMapping("/{gameId}")
+	GameResponse createGame(@PathVariable String gameId) {
+		return gameService.create(gameId);
+	}
+
 	@GetMapping("/{gameId}")
 	GameResponse getGame(@PathVariable String gameId) {
 		return gameService.getGame(gameId);

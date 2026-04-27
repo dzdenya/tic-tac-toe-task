@@ -33,13 +33,19 @@ interface SessionResponse {
   moves: SessionMoveResponse[];
 }
 
+interface SessionEventResponse {
+  type: 'move' | 'completed';
+  move: SessionMoveResponse | null;
+  game: GameResponse | null;
+  session: SessionResponse | null;
+}
+
 declare global {
   interface Window {
     TICTACTOE_API_BASE_URL?: string;
   }
 }
 
-const moveDelayMs = 800;
 const winningLines = [
   [0, 1, 2],
   [3, 4, 5],
@@ -51,6 +57,8 @@ const winningLines = [
   [2, 4, 6],
 ];
 
+const SERVER_UNAVAILABLE_MESSAGE = 'Server is not available, please try later again';
+
 export default function App() {
   const [board, setBoard] = useState<(string | null)[]>(Array(9).fill(null));
   const [currentPlayer, setCurrentPlayer] = useState<Player>('X');
@@ -61,12 +69,17 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const runIdRef = useRef(0);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const latestBoardRef = useRef<(string | null)[]>(Array(9).fill(null));
 
   const startSimulation = async () => {
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
+    eventSourceRef.current?.close();
 
-    setBoard(Array(9).fill(null));
+    const emptyBoard = Array(9).fill(null);
+    latestBoardRef.current = emptyBoard;
+    setBoard(emptyBoard);
     setCurrentPlayer('X');
     setGameState('playing');
     setWinner(null);
@@ -77,48 +90,63 @@ export default function App() {
 
     try {
       const session = await postJson<SessionResponse>('/sessions');
-      const result = await postJson<SessionResponse>(`/sessions/${session.sessionId}/simulate`);
-      const playbackBoard: (string | null)[] = Array(9).fill(null);
-      const playbackMoves: Move[] = [];
+      const eventSource = new EventSource(apiUrl(`/sessions/${session.sessionId}/events`));
+      eventSourceRef.current = eventSource;
 
-      for (const move of result.moves) {
+      eventSource.addEventListener('move', (event) => {
         if (runIdRef.current !== runId) {
+          eventSource.close();
           return;
         }
 
-        const position = move.row * 3 + move.col;
-        playbackBoard[position] = move.player;
-        playbackMoves.push({
-          player: move.player,
+        const payload = parseSessionEvent(event);
+        if (!payload.move || !payload.game) {
+          return;
+        }
+
+        const position = payload.move.row * 3 + payload.move.col;
+        const nextBoard = applyMoveToBoard(flattenBoard(payload.game.board), payload.move);
+        latestBoardRef.current = nextBoard;
+        setBoard(nextBoard);
+        setMoveHistory((moves) => [...moves, {
+          player: payload.move!.player,
           position,
           timestamp: Date.now(),
-        });
+        }]);
+        setCurrentPlayer(payload.move.player === 'X' ? 'O' : 'X');
+      });
 
-        setBoard([...playbackBoard]);
-        setMoveHistory([...playbackMoves]);
-        setCurrentPlayer(move.player === 'X' ? 'O' : 'X');
+      eventSource.addEventListener('completed', (event) => {
+        if (runIdRef.current !== runId) {
+          eventSource.close();
+          return;
+        }
 
-        await sleep(moveDelayMs);
-      }
+        const payload = parseSessionEvent(event);
+        const finalBoard = buildCompletedBoard(payload, latestBoardRef.current);
+        const finalWinner = payload.game?.winner ?? getWinner(finalBoard);
 
-      if (runIdRef.current !== runId) {
-        return;
-      }
+        latestBoardRef.current = finalBoard;
+        setBoard(finalBoard);
+        setWinner(finalWinner);
+        setWinningLine(finalWinner ? getWinningLine(finalBoard) : null);
+        setGameState(payload.game?.status === 'DRAW' ? 'draw' : finalWinner ? 'won' : 'idle');
+        setIsSimulating(false);
+        eventSource.close();
+      });
 
-      const finalBoard = flattenBoard(result.game?.board);
-      const finalWinner = result.game?.winner ?? getWinner(finalBoard);
-
-      setBoard(finalBoard);
-      setWinner(finalWinner);
-      setWinningLine(finalWinner ? getWinningLine(finalBoard) : null);
-      setGameState(result.game?.status === 'DRAW' ? 'draw' : finalWinner ? 'won' : 'idle');
+      eventSource.onerror = () => {
+        if (runIdRef.current === runId) {
+          setError(SERVER_UNAVAILABLE_MESSAGE);
+          setGameState('idle');
+          setIsSimulating(false);
+        }
+        eventSource.close();
+      };
     } catch (caughtError) {
       if (runIdRef.current === runId) {
-        setError(caughtError instanceof Error ? caughtError.message : 'Failed to simulate game');
+        setError(errorMessageForDisplay(caughtError));
         setGameState('idle');
-      }
-    } finally {
-      if (runIdRef.current === runId) {
         setIsSimulating(false);
       }
     }
@@ -185,18 +213,28 @@ export default function App() {
 }
 
 async function postJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${resolveApiBaseUrl()}${path}`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(apiUrl(path), {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+  } catch (error) {
+    throw new Error(SERVER_UNAVAILABLE_MESSAGE, { cause: error });
+  }
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
   }
 
   return response.json();
+}
+
+function apiUrl(path: string) {
+  return `${resolveApiBaseUrl()}${path}`;
 }
 
 function resolveApiBaseUrl() {
@@ -224,6 +262,10 @@ function isLocalHost(hostname: string) {
 }
 
 async function readErrorMessage(response: Response) {
+  if (response.status >= 500) {
+    return SERVER_UNAVAILABLE_MESSAGE;
+  }
+
   const fallback = `Request failed with status ${response.status}`;
 
   try {
@@ -235,8 +277,31 @@ async function readErrorMessage(response: Response) {
   }
 }
 
+function errorMessageForDisplay(error: unknown) {
+  return error instanceof Error ? error.message : 'Failed to simulate game';
+}
+
 function flattenBoard(board?: (Player | null)[][]) {
   return board?.flat().map((cell) => cell ?? null) ?? Array(9).fill(null);
+}
+
+function applyMoveToBoard(board: (string | null)[], move: SessionMoveResponse) {
+  const nextBoard = [...board];
+  nextBoard[move.row * 3 + move.col] = move.player;
+  return nextBoard;
+}
+
+function buildCompletedBoard(payload: SessionEventResponse, fallbackBoard: (string | null)[]) {
+  let finalBoard = payload.game ? flattenBoard(payload.game.board) : [...fallbackBoard];
+
+  if (payload.session?.moves?.length) {
+    finalBoard = payload.session.moves.reduce(
+      (board, move) => applyMoveToBoard(board, move),
+      finalBoard,
+    );
+  }
+
+  return finalBoard;
 }
 
 function getWinner(board: (string | null)[]) {
@@ -250,8 +315,6 @@ function getWinningLine(board: (string | null)[]) {
   }) ?? null;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
+function parseSessionEvent(event: Event) {
+  return JSON.parse((event as MessageEvent<string>).data) as SessionEventResponse;
 }

@@ -8,7 +8,7 @@ The application is composed of:
 
 - Game Engine Service: owns the Tic Tac Toe rules and game state.
 - Game Session Service: owns sessions, move automation, and coordination with the engine.
-- UI: a separate plain HTML/CSS/JS application that allows starting a simulation and observing the automated game.
+- UI: a separate React/Vite application that allows starting a simulation and observing the automated game.
 
 The primary goal is to demonstrate clean Spring Boot service design, REST-based inter-service communication, robust validation, error handling, and integration testing.
 
@@ -25,9 +25,8 @@ The primary goal is to demonstrate clean Spring Boot service design, REST-based 
 
 ### Optional Scope
 
-- Server-Sent Events or WebSockets for live UI updates.
+- Production-grade persistent storage.
 - Concurrent move protection.
-- Persistent storage.
 - API gateway or service discovery.
 
 ### Out of Scope for the Initial Version
@@ -47,7 +46,8 @@ The Game Engine Service is responsible for authoritative game state and rule enf
 
 Responsibilities:
 
-- Create or lazily initialize a game by `gameId`.
+- Create or return a game with a caller-provided `gameId`.
+- Lazily initialize a game by `gameId` on the first move when needed.
 - Store the board state.
 - Validate moves.
 - Reject moves when the target cell is occupied.
@@ -63,10 +63,12 @@ Responsibilities:
 
 - Create sessions.
 - Use the session ID as the game ID when communicating with the Game Engine Service.
+- Initialize the corresponding game state in the Game Engine Service when a session is created.
 - Generate automated moves for players `X` and `O`.
 - Alternate turns between players.
-- Forward moves to the Game Engine Service through a Spring Cloud OpenFeign client.
+- Forward moves to the Game Engine Service through a Spring WebClient adapter.
 - Store session status and move history.
+- Stream accepted moves and final completion over Server-Sent Events.
 - Stop simulation when the Game Engine Service reports a win or draw.
 - Expose session details to the UI.
 
@@ -82,7 +84,7 @@ Responsibilities:
 - Show winner when available.
 - Show move history.
 - Present backend or communication errors.
-- Replay returned move history with a short delay so the automated game progress is visible.
+- Subscribe to Server-Sent Events and update the board after each accepted move.
 - Be served locally or in deployment through an nginx container.
 - Communicate with the Game Session Service only.
 
@@ -209,6 +211,28 @@ If no game exists for the provided `gameId`, the service may either:
 
 The initial implementation will use lazy creation on first move and `404 NOT_FOUND` for direct lookup of an unknown game.
 
+#### POST `/games/{gameId}`
+
+Creates an empty game using the caller-provided `gameId`.
+
+This endpoint is used by the Game Session Service during `POST /sessions` so that session creation also initializes the corresponding engine game state. Repeating the request for an existing `gameId` is idempotent and returns the current game state without resetting the board.
+
+Successful response:
+
+```json
+{
+  "gameId": "session-123",
+  "board": [
+    [null, null, null],
+    [null, null, null],
+    [null, null, null]
+  ],
+  "status": "IN_PROGRESS",
+  "winner": null,
+  "lastMove": null
+}
+```
+
 ### 5.2 Game Session Service
 
 Base URL for local development:
@@ -219,7 +243,14 @@ http://localhost:8082
 
 #### POST `/sessions`
 
-Creates a new game session.
+Creates a new game session and initializes the matching game state in the Game Engine Service.
+
+Behavior:
+
+- Generate a unique `sessionId`.
+- Use the same value as `gameId`.
+- Call the Game Engine Service to create an empty game for that `gameId`.
+- Persist the session only after the engine game is initialized.
 
 Successful response:
 
@@ -228,7 +259,17 @@ Successful response:
   "sessionId": "session-123",
   "gameId": "session-123",
   "status": "CREATED",
-  "game": null,
+  "game": {
+    "gameId": "session-123",
+    "board": [
+      [null, null, null],
+      [null, null, null],
+      [null, null, null]
+    ],
+    "status": "IN_PROGRESS",
+    "winner": null,
+    "lastMove": null
+  },
   "moves": []
 }
 ```
@@ -275,9 +316,34 @@ Simulation rules:
 
 - Player `X` always starts.
 - Players alternate turns.
+- The Game Session Service waits 500 ms between accepted moves during simulation.
 - The first implementation may use a random legal move strategy.
 - Simulation stops immediately when the engine reports `X_WON`, `O_WON`, or `DRAW`.
 - Re-simulating a completed session should return a validation error.
+
+#### GET `/sessions/{sessionId}/events`
+
+Runs the same automated simulation flow as `POST /sessions/{sessionId}/simulate`, but streams progress as Server-Sent Events.
+
+Response content type:
+
+```text
+text/event-stream
+```
+
+Move event:
+
+```text
+event:move
+data:{"type":"move","move":{"turn":1,"player":"X","row":0,"col":0,"resultingStatus":"IN_PROGRESS"},"game":{"gameId":"session-123","board":[["X",null,null],[null,null,null],[null,null,null]],"status":"IN_PROGRESS","winner":null,"lastMove":{"player":"X","row":0,"col":0}},"session":null,"error":null}
+```
+
+Completed event:
+
+```text
+event:completed
+data:{"type":"completed","move":null,"game":{"gameId":"session-123","board":[["X","O","X"],["O","X","O"],["X",null,null]],"status":"X_WON","winner":"X","lastMove":{"player":"X","row":2,"col":0}},"session":{"sessionId":"session-123","gameId":"session-123","status":"COMPLETED","game":{"gameId":"session-123","board":[["X","O","X"],["O","X","O"],["X",null,null]],"status":"X_WON","winner":"X","lastMove":{"player":"X","row":2,"col":0}},"moves":[{"turn":1,"player":"X","row":0,"col":0,"resultingStatus":"IN_PROGRESS"}]},"error":null}
+```
 
 #### GET `/sessions/{sessionId}`
 
@@ -382,7 +448,7 @@ The strategy can initially be random. A later improvement may use a rule-based s
 
 ## 9. UI Behavior
 
-The initial UI will be implemented as a separate plain HTML, CSS, and JavaScript application. It will not use a frontend framework in the first version.
+The UI is implemented as a separate React/Vite application served by nginx in Docker Compose and by Vite during local frontend development.
 
 The UI should call only the Game Session Service. The Game Engine Service remains an internal backend dependency of the Game Session Service.
 
@@ -398,19 +464,9 @@ The Game Session Service should allow local UI access through CORS for developme
 
 1. User clicks `Start Simulation`.
 2. UI calls `POST /sessions` on the Game Session Service.
-3. UI calls `POST /sessions/{sessionId}/simulate` on the Game Session Service.
-4. UI replays the returned move history step by step with a short delay between moves.
-5. UI renders the final game status and board.
-
-### Optional Live Flow
-
-If SSE or WebSockets are implemented:
-
-1. User clicks `Start Simulation`.
-2. UI creates a session.
-3. UI subscribes to session updates.
-4. UI triggers simulation.
-5. UI updates the board after every move.
+3. UI opens `GET /sessions/{sessionId}/events`.
+4. UI updates the board and move history from each `move` event.
+5. UI renders the final game status and board from the `completed` event.
 
 ## 10. Testing Strategy
 
@@ -430,7 +486,7 @@ If SSE or WebSockets are implemented:
 
 ### Game Session Service Tests
 
-- Creates a session.
+- Creates a session and initializes the matching engine game state.
 - Simulates a full game.
 - Alternates players correctly.
 - Stores move history.
@@ -443,7 +499,8 @@ If SSE or WebSockets are implemented:
 ### Integration Tests
 
 - Full flow: create session, simulate game, verify terminal game outcome.
-- OpenFeign communication between Game Session Service and Game Engine Service.
+- WebClient communication between Game Session Service and Game Engine Service.
+- SSE streaming from Game Session Service to the UI.
 - Error response shape for representative invalid requests.
 
 ## 11. Implementation Constraints
@@ -454,7 +511,7 @@ If SSE or WebSockets are implemented:
 - Use Gradle 9.4.1 with Groovy DSL.
 - Use package name `com.tictactoe`.
 - Organize each service by layer (`controller`, `service`, `repository`, `model`, `dto`, `exception`, and service-specific `config` where needed).
-- Use Spring Cloud OpenFeign for Game Session Service to Game Engine Service communication.
+- Use Spring WebFlux and WebClient for Game Session Service to Game Engine Service communication.
 - Use Lombok where it reduces boilerplate without hiding business logic.
 - Use Spotless for Java formatting.
 - Use constructor injection and `private final` fields.
@@ -472,7 +529,7 @@ If SSE or WebSockets are implemented:
 - Create Gradle multi-service structure.
 - Add Game Engine Service.
 - Add Game Session Service.
-- Add separate plain HTML/CSS/JS UI app.
+- Add separate React/Vite UI app.
 - Add basic README.
 
 ### Milestone 2: Game Engine
@@ -486,7 +543,7 @@ If SSE or WebSockets are implemented:
 ### Milestone 3: Game Session
 
 - Implement session creation.
-- Implement OpenFeign client for Game Engine Service.
+- Implement WebClient adapter for Game Engine Service.
 - Implement automated simulation.
 - Store move history.
 - Add service and integration tests.
@@ -500,15 +557,13 @@ If SSE or WebSockets are implemented:
 ### Milestone 5: Polish
 
 - Improve README.
-- Add optional live updates if time allows.
+- Add live updates.
 - Add concurrency protection.
 - Review code quality and assignment alignment.
 
 ## 13. Open Decisions
 
-- Whether to use random moves only or a simple rule-based strategy.
-- Whether to implement live updates in the first version or keep the initial UI request-response based.
-- Follow-up improvements are tracked separately in `IMPROVEMENT_PLAN.md` so this specification stays focused on the current implementation contract.
+- Whether to keep random move selection or replace it with a deterministic rule-based strategy.
 
 ## 14. Proposed Initial Decisions
 
@@ -519,6 +574,6 @@ If SSE or WebSockets are implemented:
   - `game-engine-service` on port `8081`
   - `game-session-service` on port `8082`
 - Use H2 in-memory databases for both backend services.
-- Use Spring Cloud OpenFeign communication from Game Session Service to Game Engine Service.
-- Use a separate plain HTML/CSS/JS browser UI for the first version.
-- Use request-response simulation first and replay returned moves in the UI; add SSE only if time remains.
+- Use Spring WebClient communication from Game Session Service to Game Engine Service.
+- Use a separate React/Vite browser UI.
+- Use SSE for live simulation updates in the UI, while retaining request-response simulation for smoke tests and clients that do not need streaming.

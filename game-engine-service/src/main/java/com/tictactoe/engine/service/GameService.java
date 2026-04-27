@@ -9,7 +9,16 @@ import com.tictactoe.engine.dto.MoveRequest;
 public interface GameService {
 
 	/**
-	 * Returns the persisted game state for the given identifier.
+	 * Creates an empty game for the provided id, or returns the existing game without
+	 * resetting its board.
+	 *
+	 * @param gameId stable game identifier supplied by the caller
+	 * @return current game snapshot
+	 */
+	GameResponse create(String gameId);
+
+	/**
+	 * Looks up the latest persisted game state.
 	 *
 	 * @param gameId stable game identifier
 	 * @return current game snapshot
@@ -17,11 +26,11 @@ public interface GameService {
 	GameResponse getGame(String gameId);
 
 	/**
-	 * Applies a move to the game, creating the game record if this is the first move.
+	 * Applies a move to the game, creating the game lazily when it does not exist yet.
 	 *
-	 * @param gameId stable game identifier
-	 * @param request player and board position to apply
-	 * @return updated game snapshot after validation and outcome evaluation
+	 * @param gameId  stable game identifier
+	 * @param request requested player and board position
+	 * @return updated game snapshot after the accepted move
 	 */
 	GameResponse move(String gameId, MoveRequest request);
 

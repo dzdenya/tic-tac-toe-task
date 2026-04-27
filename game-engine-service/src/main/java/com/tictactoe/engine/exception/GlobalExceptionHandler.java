@@ -5,9 +5,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,6 +28,11 @@ class GlobalExceptionHandler {
 	@ExceptionHandler(InvalidMoveException.class)
 	ResponseEntity<ApiErrorResponse> handleInvalidMove(InvalidMoveException exception, HttpServletRequest request) {
 		return error(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+	}
+
+	@ExceptionHandler({ObjectOptimisticLockingFailureException.class, DataIntegrityViolationException.class})
+	ResponseEntity<ApiErrorResponse> handleConcurrentUpdate(HttpServletRequest request) {
+		return error(HttpStatus.CONFLICT, "Game was updated concurrently; retry the request", request);
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

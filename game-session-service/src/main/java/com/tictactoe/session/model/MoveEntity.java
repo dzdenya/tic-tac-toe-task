@@ -1,50 +1,40 @@
 package com.tictactoe.session.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import lombok.Getter;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
-@Entity
+@Getter
 @Table(name = "session_moves")
 public class MoveEntity {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "session_id", nullable = false)
-	private GameSessionEntity session;
+	@Column("session_id")
+	private String sessionId;
 
-	@Column(nullable = false)
+	@Column("turn")
 	private int turn;
 
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
+	@Column("player")
 	private PlayerSymbol player;
 
-	@Column(name = "row_index", nullable = false)
+	@Column("row_index")
 	private int row;
 
-	@Column(name = "col_index", nullable = false)
+	@Column("col_index")
 	private int col;
 
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
+	@Column("resulting_status")
 	private GameStatus resultingStatus;
 
 	protected MoveEntity() {
 	}
 
-	public MoveEntity(int turn, PlayerSymbol player, int row, int col, GameStatus resultingStatus) {
+	public MoveEntity(String sessionId, int turn, PlayerSymbol player, int row, int col, GameStatus resultingStatus) {
+		this.sessionId = sessionId;
 		this.turn = turn;
 		this.player = player;
 		this.row = row;
@@ -52,27 +42,4 @@ public class MoveEntity {
 		this.resultingStatus = resultingStatus;
 	}
 
-	public int getTurn() {
-		return turn;
-	}
-
-	public PlayerSymbol getPlayer() {
-		return player;
-	}
-
-	public int getRow() {
-		return row;
-	}
-
-	public int getCol() {
-		return col;
-	}
-
-	public GameStatus getResultingStatus() {
-		return resultingStatus;
-	}
-
-	void setSession(GameSessionEntity session) {
-		this.session = session;
-	}
 }

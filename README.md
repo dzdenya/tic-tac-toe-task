@@ -2,12 +2,12 @@
 
 Distributed Tic Tac Toe home assignment built with Java 25, Spring Boot 4.0.6, Gradle 9.4.1, H2, and a separate React/Vite UI.
 
-See [SPEC.md](SPEC.md) for the working specification and [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) for the prioritized follow-up plan.
+See [SPEC.md](SPEC.md) for the working specification.
 
 ## Modules
 
 - `game-engine-service`: owns board state, move validation, and game outcome calculation.
-- `game-session-service`: owns sessions, automated move simulation, and communication with the engine through Spring Cloud OpenFeign.
+- `game-session-service`: owns sessions, automated move simulation, move history, SSE updates, and communication with the engine through Spring WebClient.
 - `ui`: separate React/Vite browser UI based on the Figma Make design sample.
 
 ## Local Ports
@@ -98,13 +98,14 @@ When served from localhost, the UI calls `http://localhost:8082`.
 
 The Game Session Service calls the Game Engine Service at `http://localhost:8081` in local Gradle mode.
 
-The UI displays the returned move history step by step with a short delay so the automated game is visible instead of appearing instantly.
+The UI opens the session SSE stream and updates the board after each accepted move so the automated game is visible as it progresses.
 
 ## API
 
 ### Game Engine Service
 
 ```text
+POST /games/{gameId}
 POST /games/{gameId}/move
 GET  /games/{gameId}
 ```
@@ -127,9 +128,18 @@ The engine validates board bounds, occupied cells, completed games, and turn ord
 POST /sessions
 POST /sessions/{sessionId}/simulate
 GET  /sessions/{sessionId}
+GET  /sessions/{sessionId}/events
 ```
 
-The session service creates sessions, generates automated moves, calls the engine through OpenFeign, stores move history in H2, and stops when the engine reports a win or draw.
+The session service creates sessions, generates automated moves, calls the engine through WebClient, stores move history in H2, streams move events over SSE, and stops when the engine reports a win or draw.
+
+Live simulation stream:
+
+```text
+GET /sessions/{sessionId}/events
+```
+
+The SSE stream emits `move` events for accepted moves and a final `completed` event with the completed session snapshot.
 
 ## API Smoke Test
 
@@ -173,7 +183,8 @@ The test suite covers:
 - full automated simulation,
 - move history persistence,
 - repeated simulation rejection,
-- OpenFeign-based session-to-engine flow using a local stub engine in tests.
+- WebClient-based session-to-engine flow using a local stub engine in tests,
+- SSE simulation events.
 
 Run everything with:
 
@@ -181,12 +192,8 @@ Run everything with:
 ./gradlew build
 ```
 
-## Potential Improvements
-
-The prioritized improvement roadmap lives in [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md).
-
 ## Notes
 
 - The UI calls the Game Session Service only.
-- The Game Session Service calls the Game Engine Service through Spring Cloud OpenFeign.
+- The Game Session Service calls the Game Engine Service through Spring WebClient.
 - Both backend services use H2 in-memory databases.
